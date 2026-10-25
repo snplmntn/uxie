@@ -5,3 +5,6 @@ node_modules
 server/runs/
 .superpowers/
 .DS_Store
+
+# Copyrighted source books: never commit
+docs/*.pdf
