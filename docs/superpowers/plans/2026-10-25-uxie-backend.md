@@ -318,7 +318,7 @@ export function currentPage(context:BrowserContext): Page                       
 
 ```ts
 export type ExecResult = { ok:boolean; box?:Box; element?:string; reason?:string }
-export function resolveLocator(page:Page, ref:string): Locator      // role|name|index → getByRole(role,{name,exact:true}).nth(index)
+export function resolveLocator(page:Page, ref:string): Locator      // role|name|index → getByRole(role,{name,exact:true}).nth(index); an empty name is matched exactly as empty, never dropped (index is per role+name, as candidates.ts counts it)
 export function labelFor(action:Action, avatar:Avatar): string      // pure: 'Opening "Pricing"' | 'Tapping "Pricing"' (touch) | 'Scrolling down' | 'Pressing Tab' | 'Done' | 'Giving up'
 export async function applyAction(page:Page, action:Action, avatar:Avatar): Promise<ExecResult>
 ```
