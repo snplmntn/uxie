@@ -102,6 +102,9 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
       if (consecutiveTaskFriction(run.steps) >= avatar.giveUpAfter) { end('gave_up', 'friction floor'); break }
     }
     return run
+  } catch (e) {
+    end('failed', (e as Error).message)
+    return run
   } finally {
     await context?.close().catch(() => {})
     run.endedAt = new Date().toISOString()

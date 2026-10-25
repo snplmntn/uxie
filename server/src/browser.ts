@@ -37,7 +37,8 @@ export async function openAvatarPage(avatar:Avatar, url:string): Promise<{ conte
   }
   context.on('page', wire) // popups; followed via currentPage
   const page = await context.newPage()
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 })
+  try { await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 }) }
+  catch (e) { await context.close().catch(() => {}); throw e }
   return { context, page, interruptions }
 }
 
