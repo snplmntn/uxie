@@ -9,6 +9,14 @@
     "frictionEvents": ["model-flagged-friction", "failed-action", "mechanical-failure"],
     "goalCompletion": "A done action is only a claim. Verify the final page state separately; unclear is not success.",
     "elementTargeting": "Use current-step accessibility references. Use coordinates only when the avatar is permitted to perceive the visible target and no reference exists; record that gap as friction.",
+    "actionPolicy": {
+      "runtimeToolsAreAuthoritative": true,
+      "avatarDefinitionsAreExhaustiveActionLists": false,
+      "blockedRisks": ["consequential"],
+      "formEntryRequiresGoal": true,
+      "formDataSource": "synthetic-only",
+      "rule": "The backend owns a reviewed registry of browser tools and supplies only relevant current-page candidates from that registry. Avatar preferences guide selection; machine-readable interaction constraints filter candidates, while conditional privacy and safety rules are enforced by backend checks. A new tool is not available until it is added to and reviewed in the backend registry. Do not duplicate tool allowlists in avatar definitions."
+    },
     "syntheticFormData": {
       "name": "Uxie Test",
       "email": "tester@uxie-test.invalid",
@@ -32,7 +40,12 @@
         "touch": false
       },
       "perception": { "screenshotToModel": true, "accessibilityTreeToModel": true },
-      "allowedActions": ["click", "type", "scroll", "press", "done", "give_up"],
+      "interaction": {
+        "preferredModes": ["pointer"],
+        "forbiddenModes": [],
+        "hardConstraints": [],
+        "preferences": ["Read top-to-bottom and choose a target she can identify by its visible label."]
+      },
       "personaInstructions": [
         "Read the page from top to bottom; do not skim.",
         "Take one action at a time and choose only targets you can identify by their visible label.",
@@ -59,7 +72,12 @@
         "rightClick": false
       },
       "perception": { "screenshotToModel": true, "accessibilityTreeToModel": true },
-      "allowedActions": ["tap", "type", "scroll", "press", "done", "give_up"],
+      "interaction": {
+        "preferredModes": ["touch"],
+        "activationMode": "touch",
+        "forbiddenModes": ["pointer", "hover", "right-click"],
+        "hardConstraints": ["Use touch for pointing and activation. Keyboard input is available for text entry and on-screen keyboard operation."]
+      },
       "personaInstructions": [
         "You have never visited this site. Work out the goal from the page itself.",
         "Use touch taps and scrolling only; never hover or right-click.",
@@ -96,8 +114,12 @@
         "visibleTextToModel": true,
         "focusIndicatorInspection": "executor-evidence-only"
       },
-      "allowedActions": ["press", "scroll", "done", "give_up"],
-      "allowedKeys": ["Tab", "Shift+Tab", "Enter", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Escape"],
+      "interaction": {
+        "preferredModes": ["keyboard"],
+        "activationMode": "keyboard",
+        "forbiddenModes": ["pointer", "touch", "coordinate-click", "drag", "hover"],
+        "hardConstraints": ["Use keyboard-operable actions only. The runtime may add keyboard tools or keys without changing this avatar definition."]
+      },
       "personaInstructions": [
         "Use only the accessibility tree, its names and roles, and trimmed page text; you cannot see screenshots.",
         "Navigate using headings, landmarks, links, form labels, and keyboard focus.",
@@ -124,7 +146,12 @@
         "keyboardShortcuts": true
       },
       "perception": { "screenshotToModel": true, "accessibilityTreeToModel": true },
-      "allowedActions": ["click", "type", "scroll", "press", "navigate", "done", "give_up"],
+      "interaction": {
+        "preferredModes": ["keyboard", "pointer"],
+        "forbiddenModes": [],
+        "hardConstraints": [],
+        "preferences": ["Prefer actions that advance the stated goal efficiently; use keyboard shortcuts when useful; do not invent routes or controls."]
+      },
       "personaInstructions": [
         "Scan for common controls and patterns; do not read marketing copy unless it helps complete the goal.",
         "Expect common destinations such as Login and Pricing in predictable navigation locations.",
@@ -150,7 +177,12 @@
         "blockThirdPartyCookies": true
       },
       "perception": { "screenshotToModel": true, "accessibilityTreeToModel": true },
-      "allowedActions": ["click", "type", "scroll", "press", "done", "give_up"],
+      "interaction": {
+        "preferredModes": [],
+        "forbiddenModes": [],
+        "hardConstraints": ["Never accept optional cookies when a rejection option is available. Never enter personal data before public product and pricing information is available, unless the stated goal specifically requires form entry; then use only synthetic test data."],
+        "preferences": ["Prefer clear, direct controls."]
+      },
       "personaInstructions": [
         "Reject cookie banners when a reject or necessary-only option is available; never accept optional cookies.",
         "Before entering personal data, look for a clear explanation of the product and its pricing.",
@@ -162,7 +194,12 @@
       "mechanics": {
         "giveUpAfterConsecutiveFriction": 5,
         "cookieChoice": "reject-optional-or-necessary-only",
-        "personalDataBeforeProductAndPricing": "friction; continue exploring if a reasonable public path remains"
+        "personalDataPolicy": {
+          "requirePublicProductAndPricingFirst": true,
+          "allowWhenGoalRequiresForm": true,
+          "dataSource": "synthetic-only",
+          "continueExploringIfPublicPathExists": true
+        }
       },
       "evidence": ["screenshot", "exact-ui-copy", "element-reference-or-bounding-box", "page-url", "step-and-action"]
     }

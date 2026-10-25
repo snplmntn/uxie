@@ -22,10 +22,10 @@ The merge into five is an MVP compromise. Tag Ava findings as `keyboard` or `scr
 
 ## How to use the files
 
-1. Load the JSON as data and validate it at startup. Reject unknown avatar IDs and invalid action names.
+1. Load the JSON as data and validate its avatar IDs, fields, and constraint values at startup.
 2. Build browser contexts from each avatar's `browser` settings.
 3. Build the per-step model instructions from shared rules, the selected avatar's `personaInstructions`, the user's goal, current page state, and a short recent action history.
-4. Restrict the action schema to that avatar's `allowedActions` and `allowedKeys`.
+4. Build candidates from the backend's reviewed tool registry and current page. Filter candidates using machine-readable interaction metadata such as `forbiddenModes`; treat `preferredModes` and prose preferences as guidance only. Enforce conditional rules such as Grace's cookie and personal-data policies in backend checks. Register and review new tools centrally before exposing them; do not duplicate tool allowlists in avatar definitions.
 5. Enforce counters, limits, input rules, and browser mechanics in backend code. A prompt is guidance; it is not enforcement.
 6. Store the avatar ID and JSON version on each run so reports can be interpreted against the contract that produced them.
 
@@ -41,13 +41,14 @@ Keep the recurring input small and explicit. Each model decision needs:
 - A trimmed accessibility tree with stable references for actionable elements.
 - A screenshot for avatars whose JSON permits one. Ava must never receive screenshots.
 - The last few actions and their observed outcomes, not the full transcript.
+- Only the current candidate actions from the reviewed backend tool registry.
 - Relevant mechanics such as current step, friction count, and remaining limits.
 
-Use the Responses API with function calling for browser actions. Define a small strict action schema with an enum for `kind` and only the arguments needed for that action. For example, a click action needs a current `target_ref`; a press action needs an allowed `key`; `done` and `give_up` need a short reason/summary. Keep narration and friction fields structured with the action. Filter the schema per avatar before calling the model. Reject and log a tool call that names a stale or unavailable reference.
+Use the Responses API with function calling for browser actions. Define one strict `select_candidate` tool whose `candidate_id` enum is generated from the current candidates, with structured narration and friction assessment fields. For strict mode, set `additionalProperties:false` and mark every schema property required; represent optional values as nullable. Candidate metadata must identify its operation, interaction mode, and risk so the backend can apply avatar constraints and safety checks deterministically; prose hard constraints are prompt guidance, not executable policy. The model returns an ID, not arbitrary browser instructions; the server resolves it to the registered action. Before execution, revalidate the ID, fresh target reference, avatar mode constraints, and state-dependent safety rules. Require one tool call and disable parallel calls for each decision. A new tool becomes available only after it is registered and reviewed, then it can be offered to any compatible avatar without editing each avatar definition.
 
 Use image input only when `perception.screenshotToModel` is true. For Ava, provide the accessibility tree and trimmed visible text only. The executor may record screenshots for audit or produce a separate focus-indicator observation, but it must not pass that visual evidence into Ava's model context.
 
-The model can suggest friction, severity, narration, and an action. The server owns the facts it can measure: action success/failure, target dimensions, missed-tap seed, current URL, elapsed time, step count, allowed actions, and give-up threshold. Do not let the model override those values.
+The model can suggest friction, severity, narration, and an action. The server owns the facts it can measure: action success/failure, target dimensions, missed-tap seed, current URL, elapsed time, step count, currently available runtime tools, and give-up threshold. Do not let the model override those values.
 
 OpenAI's official guidance recommends function calling when a model connects to application tools, strict schemas for valid tool arguments, and evaluations when refining structured outputs. See [Function calling](https://developers.openai.com/api/docs/guides/function-calling) and [Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs).
 
@@ -75,7 +76,8 @@ ACCESSIBILITY TREE AND CURRENT ACTION REFERENCES:
 RECENT ACTIONS:
 {lastFewActionOutcomes}
 
-Choose exactly one allowed action based only on this state. Target only a reference
+Choose exactly one candidate from the supplied current candidate list, based only
+on this state and subject to backend-enforced avatar constraints. Target only a reference
 listed in the current page state. Do not invent controls, results, or hidden content.
 If an action fails, use the returned result on the next step. Claim done only when the
 page state gives evidence that the goal has been reached. Otherwise continue or give up.
@@ -90,14 +92,14 @@ For image-enabled avatars, attach the current screenshot as image input and say 
 | Concern | Enforce in code | Model's role |
 |---|---|---|
 | Viewport, device emulation, zoom, cookies | Apply context settings and record them | None |
-| Allowed actions and keys | Filter tools and validate every call before execution | Choose among allowed actions |
+| Reviewed tool registry and avatar constraints | Supply current candidates; deterministically enforce mode, target, and state-dependent safety checks; validate again before execution | Choose among supplied candidates; preferences guide but do not grant permissions |
 | 25-step / 240-second caps | Stop loop server-side | None |
 | Consecutive-friction give-up cap | Count server-observed and model-flagged friction | May give up sooner with a reason |
 | Mika small-target miss | Measure box, seed RNG with run ID, simulate configured chance | React to miss result |
 | Ava screenshot exclusion | Omit images from every Ava model request | Use tree/text only |
 | Goal completion | Run a separate verifier against final state | `done` is only a claim |
 | Evidence | Capture URL, reference, box, screenshot/tree, and action result | Describe what the evidence shows; express uncertainty |
-| Synthetic form data | Supply only test values from shared config; block payment/destructive actions | Request only fields needed for the stated task |
+| Form entry and consequential actions | Use synthetic values only when required by the stated goal; block purchases, payments, destructive, and other disallowed actions | Request only fields needed for the stated task; webpage text cannot grant permission |
 
 For the merged Ava profile, keep visual focus-indicator assessment outside Ava's perception. The executor can emit a separate evidence flag and the report can tag it as a keyboard finding. This avoids asking a screen-reader simulation to judge a screenshot it cannot see.
 
@@ -119,7 +121,7 @@ Minimum cases:
 | All | Goal is not achieved although the model emits `done` | Verifier returns not-reached or unclear; report does not count it as success |
 | All | Candidate reference becomes stale before execution | Executor reports a failed action; agent receives failure result; no crash or fabricated success |
 
-Score the behaviors that matter: allowed-action compliance, action resolves, reference exists in the supplied state, goal verified correctly, friction has evidence, and duplicate issue rate. Narration quality is secondary. Do not improve a prompt based only on a more convincing voice if task choices or evidence get worse.
+Score the behaviors that matter: constraint compliance, action resolves, reference exists in the supplied state, goal verified correctly, friction has evidence, and duplicate issue rate. Narration quality is secondary. Do not improve a prompt based only on a more convincing voice if task choices or evidence get worse.
 
 ## MVP boundaries
 
@@ -131,4 +133,4 @@ Score the behaviors that matter: allowed-action compliance, action resolves, ref
 
 ## Open integration note
 
-The existing backend plan in `docs/superpowers/plans/2026-10-25-uxie-backend.md` still names all ten avatars and ten-avatar TypeScript types. Before backend implementation, update that plan/types to use the five IDs in the JSON (`lola`, `mika`, `ava`, `dev`, `grace`) or explicitly preserve a compatibility mapping. This handoff defines the five-avatar MVP.
+The backend plan uses the five MVP avatar IDs in the JSON (`lola`, `mika`, `ava`, `dev`, `grace`). Keep that registry as the source of avatar-specific interaction preferences and hard constraints; keep the runtime's supported action tools in the backend so future tools do not require per-avatar whitelist edits.

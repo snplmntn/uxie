@@ -82,7 +82,7 @@ Shown automatically when every avatar is finished.
 
 ## Avatars
 
-The MVP includes five avatars: Lola, Mika, Ava, Dev, and Grace. Their machine-readable implementation contract is `2026-10-25-uxie-avatars.json`; each defines browser configuration, model perception, allowed actions, persona instructions, friction limits, and evidence requirements. A persona with no mechanical browser/action change is not an avatar. Tita Baby, Jun, Ren, Paolo, and Theo remain future concepts; their original profile notes below are reference material, not MVP implementation requirements.
+The MVP includes five avatars: Lola, Mika, Ava, Dev, and Grace. Their machine-readable implementation contract is `2026-10-25-uxie-avatars.json`; each defines browser configuration, model perception, interaction preferences and hard constraints, persona instructions, friction limits, and evidence requirements. The runtime supplies the available action tools; avatar definitions do not enumerate or whitelist them. Tita Baby, Jun, Ren, Paolo, and Theo remain future concepts; their original profile notes below are reference material, not MVP implementation requirements.
 
 | # | Name | Who | Browser config | Persona rules |
 |---|------|-----|----------------|---------------|
@@ -137,7 +137,7 @@ Each avatar has a name, a short tagline for the tile, and an icon. Icons: simple
 - One agent loop per avatar. Each step:
   1. Capture state according to the selected avatar's perception settings: screenshot only when allowed, accessibility tree, current URL, and page title.
   2. Call the Responses API with base rules, avatar instructions from the registry, the goal, a short recent history, and current page state.
-  3. Model returns one structured, avatar-allowed action plus brief narration and evidence-backed friction. Validate the action schema and target reference before executing it.
+  3. Model returns one structured action from the runtime's current tool set, subject to the avatar's hard interaction constraints, plus brief narration and evidence-backed friction. Validate the action schema and target reference before executing it.
   4. `done` is only a claim. Verify goal completion against the resulting page state in a separate verifier call; unclear is never success.
 - 5. Execute the action with Playwright. If the target cannot be resolved, record a failed step (counts as friction) and continue.
 - 6. Emit a step event to the client over Server-Sent Events: avatar id, step number, narration, screenshot path, friction if any.
@@ -176,7 +176,7 @@ Screenshots are stored on disk under a per-run folder and served statically. Run
 ### Decisions from the builder check (author's calls)
 
 - **Success is verified, not claimed.** `done(summary)` is a claim. A separate verifier model call receives the goal, the final screenshot (or tree for Ava), final URL, and the agent's summary, and returns `reached | not_reached | unclear`. Only `reached` counts as success; `unclear` is shown as "unverified" in the report, never as a pass.
-- **Per-avatar action sets.** Ava's actions are restricted to keyboard input and scrolling; the model receives the accessibility tree plus trimmed `innerText`, never a screenshot. Focus visibility, if checked, is attached as executor evidence and is not shown to Ava's model.
+- **Runtime action policy.** Browser actions come from a reviewed backend registry, not per-avatar action lists. Each candidate is tagged with operation, interaction mode, and risk. The backend filters candidates using machine-readable interaction constraints and rechecks state-dependent privacy/safety rules before execution; Ava activates by keyboard and Mika by touch. The model receives the accessibility tree plus trimmed `innerText`, never a screenshot for Ava. Focus visibility, if checked, is attached as executor evidence and is not shown to Ava's model.
 - **Give-up floors live in code.** The server counts consecutive evidence-backed friction steps or failed actions and ends the run at registry thresholds: Lola 4, Dev 3, Mika/Ava/Grace 5. The model may give up earlier via `give_up`.
 - **Mechanical rules are enforced in code where possible.** Mika's tap miss is a seeded 30% roll on targets under 44px in either dimension; the seed is the run ID. Lola's readability judgment uses the zoomed screenshot and states uncertainty where appearance does not establish a measurement.
 - **Bounding boxes come from the executor.** Resolving a tree reference to an element at action time records its bounding box on the step; the report highlight uses that box. The summarizer deduplicates issues on page URL plus accessible name, falling back to description similarity.
