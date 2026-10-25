@@ -4,7 +4,7 @@ import type { ExecResult } from './executor.ts'
 import type { PageState } from './browser.ts'
 import type { BrowserContext, Page } from 'playwright'
 import { SHARED_JUDGMENTS } from './avatars.ts'
-import { buildCandidates, unnamedControls } from './candidates.ts'
+import { buildCandidates, parseSnapshot, unnamedControls } from './candidates.ts'
 import { decide } from './judge.ts'
 import { openAvatarPage, captureState, currentPage } from './browser.ts'
 import { applyAction, labelFor } from './executor.ts'
@@ -12,14 +12,16 @@ import { applyAction, labelFor } from './executor.ts'
 export type AgentCtx = { runId:string; url:string; goal:string; avatar:Avatar; runDir:string; isStopping:()=>boolean; emit:(e:RunEvent)=>void }
 
 const MAX_STEPS = 25, MAX_MS = 240_000, MIN_TARGET = 44
-const CONSENT_UI = /cookie|consent|gdpr|privacy (preference|setting|choice)/i
+const CONSENT_BUTTON = /cookie|consent|accept all|reject all|necessary only|manage preferences/i
+// A consent UI means a button offering a choice, not a footer "Cookie policy" link.
+const hasConsentUI = (snapshot:string) => parseSnapshot(snapshot).some(n => n.role === 'button' && CONSENT_BUTTON.test(n.name))
 
 export function frictionFromStep(decision:Decision, exec:ExecResult, avatar:Avatar, snapshot:string, focused?:string): Friction[] {
   if (!exec.ok) return []
   const out: Friction[] = []
   for (const j of [...SHARED_JUDGMENTS, ...avatar.judgments]) {
     // A consent judgment only means something when a consent UI is actually on the page.
-    if (j.name === 'consent_choice_clear' && !CONSENT_UI.test(snapshot)) continue
+    if (j.name === 'consent_choice_clear' && !hasConsentUI(snapshot)) continue
     const v = decision.judgments[j.name]
     if (j.name === 'target_too_small' && exec.box) {
       // A measured box overrides the model's guess either way.
