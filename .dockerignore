@@ -1,0 +1,7 @@
+**/node_modules
+web
+server/runs
+.env
+**/.env*
+.git
+docs
