@@ -19,6 +19,7 @@ test('parseSnapshot lists interactive nodes in order with occurrence index', () 
 test('buildCandidates: named clicks only, control actions last, cap 40, Mika taps', () => {
   const c = buildCandidates(snap, getAvatar('dev')!)
   assert.ok(c.some(x => x.action.kind === 'click' && x.action.ref === refFor({role:'link',name:'Pricing',index:0})))
+  assert.ok(c.some(x => x.action.kind === 'click' && x.action.label === 'Pricing'))
   assert.ok(!c.some(x => x.action.kind === 'click' && x.action.ref === 'button||0'))
   assert.ok(!c.some(x => (x.action as any).kind === 'type'))
   assert.deepEqual(c.slice(-5).map(x => x.value), ['scroll_down','scroll_up','press_escape','done','give_up'])
@@ -29,5 +30,9 @@ test('buildCandidates: named clicks only, control actions last, cap 40, Mika tap
 test('Ren gets the permitted key presses only', () => {
   const c = buildCandidates(snap, getAvatar('ren')!)
   assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_escape','done','give_up'])
+})
+test('parseSnapshot reads single-quoted keys', () => {
+  assert.deepEqual(parseSnapshot(`- 'link "Note: x"'\n- 'button "It''s \\"on\\""'`).map(n => [n.role, n.name, n.index]),
+    [['link','Note: x',0], ['button','It\'s "on"',0]])
 })
 test('unnamedControls counts empty names', () => { assert.equal(unnamedControls(snap), 1) })

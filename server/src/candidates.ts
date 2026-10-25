@@ -3,7 +3,8 @@ import type { Avatar, Candidate } from './types.ts'
 export type Node = { role:string; name:string; index:number }
 
 const INTERACTIVE = new Set(['link','button','textbox','searchbox','combobox','checkbox','radio','menuitem','tab','switch','option'])
-const LINE = /^\s*- ([a-z]+)(?: "((?:[^"\\]|\\.)*)")?/
+// Playwright wraps the key in single quotes (doubling inner ') when YAML needs it, e.g. - 'link "Step 1: Go"'
+const LINE = /^\s*- ('?)([a-z]+)(?: "((?:[^"\\]|\\.)*)")?/
 const MAX = 40
 
 export function parseSnapshot(yaml:string): Node[] {
@@ -11,8 +12,9 @@ export function parseSnapshot(yaml:string): Node[] {
   const nodes:Node[] = []
   for (const line of yaml.split('\n')) {
     const m = LINE.exec(line)
-    if (!m || !INTERACTIVE.has(m[1])) continue
-    const role = m[1], name = (m[2] ?? '').replace(/\\(.)/g, '$1')
+    if (!m || !INTERACTIVE.has(m[2])) continue
+    const raw = m[1] ? (m[3] ?? '').replaceAll("''", "'") : (m[3] ?? '')
+    const role = m[2], name = JSON.parse(`"${raw}"`) as string
     const key = `${role}|${name}`
     const index = seen.get(key) ?? 0
     seen.set(key, index + 1)
@@ -45,7 +47,7 @@ export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[] {
   const clicks = parseSnapshot(snapshot).filter(n => n.name).slice(0, MAX - tail.length).map((n, i): Candidate => ({
     value: `click_${i}`,
     description: `${verb} ${n.role} "${n.name}"`,
-    action: { kind:'click', ref: refFor(n), label: `${n.role} "${n.name}"` },
+    action: { kind:'click', ref: refFor(n), label: n.name },
   }))
   return [...clicks, ...tail]
 }
