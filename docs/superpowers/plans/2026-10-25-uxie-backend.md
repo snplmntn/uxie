@@ -64,7 +64,6 @@ export type Judgment = {
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
 export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
-export const SHARED_JUDGMENTS: Judgment[]   // defined in avatars.ts; content_clear for every avatar
 export type Action =
   | { kind:'click'; ref:string; label:string }
   | { kind:'scroll'; direction:'up'|'down' }
@@ -104,7 +103,7 @@ export type RunEvent =
 
 - [ ] **Step 1: Create the package**
 
-`server/package.json`: `"type":"module"`, scripts `dev: node --env-file=../.env --watch src/index.ts`, `start: node --env-file=../.env src/index.ts`, `test: node --test test/`. Dependencies `hono`, `@hono/node-server`, `playwright`; dev `@types/node`. `tsconfig.json`: `module: nodenext`, `target: es2022`, `strict`, `noEmit`, `allowImportingTsExtensions`, `verbatimModuleSyntax`, `erasableSyntaxOnly`. `.env.example`: `OPENAI_API_KEY=`, `OPENAI_TEXT_MODEL=`, `PORT=4000`.
+`server/package.json`: `"type":"module"`, scripts `dev: node --env-file=../.env --watch src/index.ts`, `start: node --env-file=../.env src/index.ts`, `test: node --test 'test/**/*.test.ts'`. Types are erased by Node at runtime, so every type-only import must use `import type { … } from './types.ts'`; a value import of a type fails at load. Dependencies `hono`, `@hono/node-server`, `playwright`; dev `@types/node`. `tsconfig.json`: `module: nodenext`, `target: es2022`, `strict`, `noEmit`, `allowImportingTsExtensions`, `verbatimModuleSyntax`, `erasableSyntaxOnly`. `.env.example`: `OPENAI_API_KEY=`, `OPENAI_TEXT_MODEL=`, `PORT=4000`.
 
 - [ ] **Step 2: Write the failing test**
 
@@ -487,11 +486,11 @@ export function loadPrinciples(path?:string): { source:'loaded'|'pending'; text:
 export type Cluster = { key:string; pageUrl:string; element?:string; severity:Severity; avatarIds:AvatarId[]; stepRefs:StepRef[]; screenshot:string|null; treeExcerpt?:string; box?:Box; description:string }
 export function clusterFriction(run:Run): Cluster[]     // key = pathname|element|description; severity = max; sorted blocker>major>minor then avatar count desc
 export function fallbackReport(run:Run, clusters:Cluster[], source:'loaded'|'pending', reason:string): Report   // overallScore null, unableToRateReason = reason, issues from clusters with template fix prompts ('Principle: source pending'), avatarNotes templated from status ("Lola gave up after 6 steps on /pricing")
-export function validateReport(raw:unknown, clusters:Cluster[], source:'loaded'|'pending', avatarIds:AvatarId[]): { ok:true; value:Pick<Report,'overallScore'|'assessment'|'avatarNotes'|'recommendations'|'issues'> } | { ok:false; reason:string }
+export function validateReport(raw:unknown, clusters:Cluster[], source:'loaded'|'pending', run:Run): { ok:true; value:Pick<Report,'overallScore'|'assessment'|'avatarNotes'|'recommendations'|'issues'> } | { ok:false; reason:string }
 export async function buildReport(run:Run, deps?:{ summarizeImpl?:typeof summarize; principles?:ReturnType<typeof loadPrinciples> }): Promise<Report>
 ```
 
-`validateReport` rejects when: `overallScore` is not an integer in 1–10 and not null; `avatarNotes` is missing an entry for any selected avatar (fill the gap with a templated note from the avatar's status rather than rejecting); any issue `clusterKey` is unknown; any recommendation `issueIds` entry is unknown; more than 3 recommendations; a `principle` is present while `source === 'pending'` (strip it and continue, do not reject). Enforce: any `blocker` issue → score `min(score, 6)`. Every issue carries its cluster's `severity`, `avatarIds`, `pageUrl`, `stepRefs`, `screenshot`, `treeExcerpt`, `element`, `box`. When `source === 'pending'` and the assessment lacks the phrase `UI/UX principles source pending`, append it.
+`validateReport` rejects when: `overallScore` is not an integer in 1–10 and not null; `avatarNotes` is missing an entry for any selected avatar (fill the gap with a templated note from that avatar's status and step count in `run.avatars`, rather than rejecting); any issue `clusterKey` is unknown; any recommendation `issueIds` entry is unknown; more than 3 recommendations; a `principle` is present while `source === 'pending'` (strip it and continue, do not reject). Enforce: any `blocker` issue → score `min(score, 6)`. Every issue carries its cluster's `severity`, `avatarIds`, `pageUrl`, `stepRefs`, `screenshot`, `treeExcerpt`, `element`, `box`. When `source === 'pending'` and the assessment lacks the phrase `UI/UX principles source pending`, append it.
 
 `buildReport`: `partial` = any avatar `stopped`/`failed` or run was `stopping`; if every avatar is `failed` → fallback with reason `"all avatars failed: " + reasons`. Prompt = principles text (or "UI/UX principles source pending"), the score anchors table and the sentence "An observed blocker in a tested interaction mode rules out the 7–10 range", the fix-prompt template verbatim from the spec, goal/url, each avatar's outcome and step log (label, url, friction, executorError kept separate and marked "technical, not usability"), and the clusters with keys. Schema: `{ overallScore: integer|null, unableToRateReason?: string, assessment: string, avatarNotes: [{avatarId, note}], recommendations: [{title, why, avatarIds, issueIds, principle?}], issues: [{clusterKey, description, severity, principle?, fixPrompt}] }`. The prompt instructs: one note per selected avatar saying where they got to and, if they did not finish or flagged "Content unclear for this user", what they could not find or understand; and for any unclear-content finding, a recommendation that describes the improved step the site should offer (clearer plan names, a one-line summary under each price, a plainer button label). On `summarize` throw or validation failure → `fallbackReport` with the reason. `succeeded` = avatars with status `done`; `medianSteps`; `worstBlocker` = first blocker's description.
 
@@ -513,13 +512,12 @@ test('clusterFriction merges same path, element and problem; max severity; block
 test('validateReport enforces range, references, blocker cap and pending principles', () => {
   const clusters = clusterFriction(run); const key = clusters[0].key
   const good = { overallScore: 8, assessment:'ok', avatarNotes:[{ avatarId:'lola', note:'Reached Pricing but the plan names did not say what she would get' }], recommendations:[{ title:'t', why:'w', avatarIds:['lola'], issueIds:[key], principle:'Nielsen 1' }], issues:[{ clusterKey:key, description:'d', severity:'blocker', principle:'Nielsen 1', fixPrompt:'f' }] }
-  const v = validateReport(good, clusters, 'pending', ['lola','ren']); assert.ok(v.ok)
+  const v = validateReport(good, clusters, 'pending', run); assert.ok(v.ok)
   if (v.ok) { assert.equal(v.value.avatarNotes.length, 2); assert.match(v.value.avatarNotes[1].note, /done/i); assert.equal(v.value.overallScore, 6); assert.equal(v.value.issues[0].principle, undefined); assert.match(v.value.assessment, /principles source pending/) }
-  const ids:any = ['lola','ren']
-  assert.equal(validateReport({ ...good, overallScore: 11 }, clusters, 'loaded', ids).ok, false)
-  assert.equal(validateReport({ ...good, overallScore: '7' }, clusters, 'loaded', ids).ok, false)
-  assert.equal(validateReport({ ...good, issues:[{ ...good.issues[0], clusterKey:'nope' }] }, clusters, 'loaded', ids).ok, false)
-  assert.equal(validateReport({ ...good, recommendations:[{ ...good.recommendations[0], issueIds:['nope'] }] }, clusters, 'loaded', ids).ok, false)
+  assert.equal(validateReport({ ...good, overallScore: 11 }, clusters, 'loaded', run).ok, false)
+  assert.equal(validateReport({ ...good, overallScore: '7' }, clusters, 'loaded', run).ok, false)
+  assert.equal(validateReport({ ...good, issues:[{ ...good.issues[0], clusterKey:'nope' }] }, clusters, 'loaded', run).ok, false)
+  assert.equal(validateReport({ ...good, recommendations:[{ ...good.recommendations[0], issueIds:['nope'] }] }, clusters, 'loaded', run).ok, false)
 })
 test('loadPrinciples is pending for missing file, placeholder headings, or TBD', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ux-')); const p = join(dir, 'SKILL.md')
