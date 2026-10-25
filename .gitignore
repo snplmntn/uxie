@@ -3,3 +3,5 @@
 node_modules
 .next
 server/runs/
+.superpowers/
+.DS_Store
