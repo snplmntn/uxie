@@ -1,13 +1,17 @@
 import { chromium, devices } from 'playwright'
 import type { Browser, BrowserContext, Page } from 'playwright'
 import type { Avatar } from './types.ts'
+import { parseSnapshot } from './candidates.ts'
 
 export type PageState = { url:string; title:string; snapshot:string; pageText?:string; screenshotB64?:string; focused?:string }
 
 let browserPromise: Promise<Browser> | undefined
 
 export async function getBrowser(): Promise<Browser> {
-  browserPromise ??= chromium.launch({ headless: true })
+  browserPromise ??= chromium.launch({ headless: true }).then(
+    b => { b.on('disconnected', () => { browserPromise = undefined }); return b },
+    e => { browserPromise = undefined; throw e },
+  )
   return browserPromise
 }
 
@@ -44,13 +48,11 @@ export async function captureState(page:Page, avatar:Avatar, screenshotPath:stri
   if (b.noScreenshot) state.pageText = (await page.locator('body').innerText()).slice(0, 4000)
   else state.screenshotB64 = shot.toString('base64')
   if (b.keyboardOnly) {
-    state.focused = await page.evaluate(() => {
-      const el = document.activeElement
-      if (!el || el === document.body) return 'none'
-      const role = el.getAttribute('role') ?? el.tagName.toLowerCase()
-      const name = el.getAttribute('aria-label') ?? (el as HTMLElement).innerText?.trim().slice(0, 80) ?? ''
-      return `${role}|${name}`
-    })
+    const focus = page.locator(':focus').first()
+    // ponytail: a focus change mid-capture falls back to 'none' rather than failing the step
+    const tree = await focus.count() ? await focus.ariaSnapshot({ timeout: 2000 }).catch(() => '') : ''
+    const node = parseSnapshot(tree)[0]
+    state.focused = node ? `${node.role}|${node.name}` : 'none'
   }
   return state
 }
