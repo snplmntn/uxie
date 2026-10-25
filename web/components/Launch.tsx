@@ -1,7 +1,7 @@
 'use client'
 
 import { AnimatePresence, motion, useReducedMotion, type HTMLMotionProps } from 'motion/react'
-import { useEffect, useRef, useState } from 'react'
+import { Fragment, useEffect, useRef, useState } from 'react'
 import { AV, ORDER } from '@/lib/avatars'
 import { DEMO_URL, GOALS } from '@/lib/demo'
 import type { AvatarId, RunRequest } from '@/lib/types'
@@ -88,9 +88,9 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
                   {line.map((w) => {
                     const i = wi++
                     return (
-                      <span key={w} className="w">
-                        <motion.span {...(reduce ? {} : { initial: { y: '110%', opacity: 0 }, animate: { y: 0, opacity: 1 }, transition: { duration: 0.9, ease: EASE, delay: 0.12 + i * 0.045 } })}>{w}</motion.span>{' '}
-                      </span>
+                      <Fragment key={w}>
+                        <span className="w"><motion.span {...(reduce ? {} : { initial: { y: '110%', opacity: 0 }, animate: { y: 0, opacity: 1 }, transition: { duration: 0.9, ease: EASE, delay: 0.12 + i * 0.045 } })}>{w}</motion.span></span>{' '}
+                      </Fragment>
                     )
                   })}
                 </span>

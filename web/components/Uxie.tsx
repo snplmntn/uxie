@@ -80,7 +80,6 @@ export function Uxie() {
     const t = setTimeout(() => setScreen('report'), Math.max(0, 1500 - (Date.now() - compAt.current)))
     return () => clearTimeout(t)
   }, [screen, report])
-  useEffect(() => { window.scrollTo(0, 0) }, [screen])
 
   const host = hostOf(req.url)
   const finished = runs.filter((r) => !isLive(r.status)).length
@@ -116,7 +115,7 @@ export function Uxie() {
       {error && screen === 'launch' && <p className="err-msg" role="alert" style={{ justifyContent: 'center', paddingTop: 12 }}>Couldn’t start the run: {error}</p>}
 
       <LayoutGroup>
-        <AnimatePresence mode="wait">
+        <AnimatePresence mode="wait" onExitComplete={() => window.scrollTo(0, 0)}>
           <motion.main key={screen} {...fx}>
             {screen === 'launch' && <Launch initial={req} startStep={launchStep} onRun={start} />}
             {screen === 'run' && (

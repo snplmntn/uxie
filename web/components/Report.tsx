@@ -192,7 +192,7 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
               <motion.circle cx="38" cy="38" r="31" fill="none" stroke="#1D1D1F" strokeWidth="8" strokeLinecap="round" strokeDasharray={RING}
                 initial={{ strokeDashoffset: reduce ? RING * (1 - (score ?? 0) / 10) : RING }} animate={{ strokeDashoffset: RING * (1 - (score ?? 0) / 10) }} transition={{ duration: 1.4, ease: EASE, delay: 0.35 }} />
             </svg>
-            <span className="ring-t">{score === null ? '–' : <><CountUp value={score} delay={0.35} />/10</>}</span>
+            <span className="ring-t">{score === null ? '–' : <span><CountUp value={score} delay={0.35} />/10</span>}</span>
           </div>
           <div style={{ minWidth: 0 }}>
             <div className="ov-title">{score === null ? 'Unable to rate' : `Usability score: ${score} out of 10`}</div>
