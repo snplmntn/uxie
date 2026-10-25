@@ -8,7 +8,8 @@ export function resolveLocator(page:Page, ref:string): Locator {
   const a = ref.indexOf('|'), b = ref.lastIndexOf('|')
   const role = ref.slice(0, a) as Parameters<Page['getByRole']>[0]
   const name = ref.slice(a + 1, b), index = Number(ref.slice(b + 1))
-  return (name ? page.getByRole(role, { name, exact: true }) : page.getByRole(role)).nth(index)
+  // name:'' matches only empty accessible names, consistent with candidates.ts per-(role,name) indexing
+  return page.getByRole(role, { name, exact: true }).nth(index)
 }
 
 export function labelFor(action:Action, avatar:Avatar): string {
