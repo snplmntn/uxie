@@ -64,6 +64,7 @@ export type Judgment = {
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
 export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
+export const SHARED_JUDGMENTS: Judgment[]   // defined in avatars.ts; content_clear for every avatar
 export type Action =
   | { kind:'click'; ref:string; label:string }
   | { kind:'scroll'; direction:'up'|'down' }
@@ -83,10 +84,11 @@ export type RunStatus = 'running'|'stopping'|'finished'
 export type StepRef = { avatarId:AvatarId; n:number }
 export type Issue = { id:string; severity:Severity; avatarIds:AvatarId[]; pageUrl:string; stepRefs:StepRef[]; screenshot:string|null; treeExcerpt?:string; element?:string; box?:Box; description:string; principle?:string; fixPrompt:string }
 export type Recommendation = { title:string; why:string; avatarIds:AvatarId[]; issueIds:string[]; principle?:string }
+export type AvatarNote = { avatarId:AvatarId; note:string }
 export type Report = {
   runId:string; goal:string; url:string; partial:boolean; principlesSource:'loaded'|'pending'
   overallScore:number|null; unableToRateReason?:string; assessment:string
-  recommendations:Recommendation[]; issues:Issue[]
+  avatarNotes:AvatarNote[]; recommendations:Recommendation[]; issues:Issue[]
   succeeded:number; total:number; medianSteps:number; worstBlocker?:string
   avatars:{ avatarId:AvatarId; status:AvatarStatus; steps:number; seconds:number }[]
 }
@@ -98,7 +100,7 @@ export type RunEvent =
   | { type:'report'; report:Report }
 ```
 
-- Produces `server/src/avatars.ts`: `export const AVATARS: Avatar[]` (spec order) and `export function getAvatar(id:string): Avatar | undefined`.
+- Produces `server/src/avatars.ts`: `export const AVATARS: Avatar[]` (spec order), `export function getAvatar(id:string): Avatar | undefined`, and `export const SHARED_JUDGMENTS: Judgment[]` (one entry, `content_clear`, asked for every avatar in addition to `avatar.judgments`).
 
 - [ ] **Step 1: Create the package**
 
@@ -109,7 +111,7 @@ export type RunEvent =
 ```ts
 // server/test/avatars.test.ts
 import { test } from 'node:test'; import assert from 'node:assert/strict'
-import { AVATARS, getAvatar } from '../src/avatars.ts'
+import { AVATARS, getAvatar, SHARED_JUDGMENTS } from '../src/avatars.ts'
 test('five avatars in spec order with persona, viewport and give-up floor', () => {
   assert.deepEqual(AVATARS.map(a => a.id), ['lola','mika','dev','ren','ava'])
   for (const a of AVATARS) { assert.ok(a.persona.length > 100); assert.ok(a.browser.viewport.width > 0); assert.ok(a.tagline && a.whatChanges) }
@@ -121,6 +123,7 @@ test('spec-pinned mechanics', () => {
   assert.equal(getAvatar('mika')!.browser.device, 'iPhone 15'); assert.equal(getAvatar('mika')!.browser.touch, true)
   assert.equal(getAvatar('ren')!.browser.keyboardOnly, true); assert.equal(getAvatar('ava')!.browser.noScreenshot, true)
   assert.deepEqual(getAvatar('dev')!.judgments, [])
+  assert.deepEqual(SHARED_JUDGMENTS.map(j => j.name), ['content_clear']); assert.equal(SHARED_JUDGMENTS[0].severity, 'minor')
   assert.deepEqual(getAvatar('ren')!.judgments.map(j => j.name), ['focus_visible'])
   assert.deepEqual(getAvatar('lola')!.judgments.map(j => j.name), ['readable'])
   assert.deepEqual(getAvatar('mika')!.judgments.map(j => j.name), ['target_too_small'])
@@ -141,6 +144,7 @@ Run: `cd server && npm install && npm test` → FAIL, cannot find `../src/avatar
 | mika | `target_too_small` | predicate | "Is the control most relevant to the goal small or crowded enough that a thumb tap would likely miss?" | `v >= 0.7` | minor | "Small or crowded tap target" |
 | ren | `focus_visible` | predicate | "Is the currently focused element clearly visibly indicated in this screenshot?" | `v <= 0.3` | major | "Focused element is not visibly indicated" |
 | dev, ava | none | | | | | |
+| all (`SHARED_JUDGMENTS`) | `content_clear` | predicate | "Would this user understand what this page is telling them in relation to the goal, for example what each plan includes and costs?" | `v <= 0.3` | minor | "Content unclear for this user" |
 
 - [ ] **Step 5: Run tests** → PASS (2 tests)
 
@@ -235,7 +239,7 @@ export async function decide(input:StepInput, fetchImpl?:typeof fetch): Promise<
 export async function summarize(prompt:string, schema:object, fetchImpl?:typeof fetch): Promise<unknown>   // Responses API json_schema structured output; returns parsed JSON
 ```
 
-Request: `input` = one `user` message, `content` = `[{type:'input_text', text}, {type:'input_image', image_url:'data:image/png;base64,…'}]`, image omitted when `screenshotB64` is undefined. Text = base rules + `avatar.persona` + `Goal: …` + last 6 history lines + title/url + snapshot (≤ 6000 chars) + `pageText` (≤ 4000, Ava) + `Focused: …` (Ren). Questions: `next_action` (choice over candidates), `goal_reached` (predicate, instructions exactly: "Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing."), then each `avatar.judgments` entry. Base rules exactly: "You are simulating one specific web user attempting a goal. Choose the single next action that this user, with their limits and habits, would most plausibly take. Choose done only if the goal is already achieved on this page. Choose give_up only if this user would leave."
+Request: `input` = one `user` message, `content` = `[{type:'input_text', text}, {type:'input_image', image_url:'data:image/png;base64,…'}]`, image omitted when `screenshotB64` is undefined. Text = base rules + `avatar.persona` + `Goal: …` + last 6 history lines + title/url + snapshot (≤ 6000 chars) + `pageText` (≤ 4000, Ava) + `Focused: …` (Ren). Questions: `next_action` (choice over candidates), `goal_reached` (predicate, instructions exactly: "Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing."), then each `SHARED_JUDGMENTS` entry, then each `avatar.judgments` entry. Base rules exactly: "You are simulating one specific web user attempting a goal. Choose the single next action that this user, with their limits and habits, would most plausibly take. Choose done only if the goal is already achieved on this page. Choose give_up only if this user would leave."
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -249,7 +253,7 @@ const base = (id:string) => ({ avatar:getAvatar(id)!, goal:'Find the pricing', u
 test('request carries next_action, goal_reached and avatar judgments; Ava never gets an image', () => {
   const r:any = buildDecisionRequest({ ...base('ren'), screenshotB64:'AAA=', focused:'link|Pricing|0' })
   assert.equal(r.model, 'gpt-6-luna')
-  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','focus_visible'])
+  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','content_clear','focus_visible'])
   assert.ok(r.input[0].content.some((c:any) => c.type === 'input_image'))
   const a:any = buildDecisionRequest({ ...base('ava'), screenshotB64:'AAA=', pageText:'Plans from $9' })
   assert.ok(!a.input[0].content.some((c:any) => c.type === 'input_image'))
@@ -363,7 +367,7 @@ export function finalStatus(goalReached:number, end:'done'|'gave_up'|'cap'|'stop
 
 Loop (n from 1): `isStopping()` → end `stopped`; n > 25 or elapsed > 240 s → `cap`; `captureState` to `${runDir}/${avatar.id}-${n}.png` (stored on the step as `/screenshots/<runId>/<file>`); Ava also stores `treeExcerpt` = first 1500 chars of snapshot; `buildCandidates`; `decide` (throw → status `failed`, reason message, end); `done` → end `done`; `give_up` → end `gave_up` (reason `model`); else `applyAction`; on `{ok:false}` set `step.executorError = reason` and continue; collect `interruptions` into `step.interruption`; `friction = frictionFromStep`; emit step; `consecutiveTaskFriction(steps) >= avatar.giveUpAfter` → end `gave_up` (reason `friction floor`). Navigation error → `failed`, reason `navigation: ` + message. Close context in `finally`; emit `avatar_status` at the end.
 
-`frictionFromStep`: executor errors and interruptions produce **no** friction. Each judgment with `frictionWhen(value)` true → `{severity, description}`; Mika's `target_too_small` additionally requires or reports `exec.box`: when box has width or height < 44, `measured = "${w}×${h}px"` and the friction is emitted even if the predicate is low. Ava: `unnamedControls(snapshot) > 0` → minor `"${n} unnamed controls in the accessibility tree"`.
+`frictionFromStep`: executor errors and interruptions produce **no** friction. Each judgment in `SHARED_JUDGMENTS` and `avatar.judgments` with `frictionWhen(value)` true → `{severity, description}` (`content_clear` is always minor, so it never reaches the give-up floor); Mika's `target_too_small` additionally requires or reports `exec.box`: when box has width or height < 44, `measured = "${w}×${h}px"` and the friction is emitted even if the predicate is low. Ava: `unnamedControls(snapshot) > 0` → minor `"${n} unnamed controls in the accessibility tree"`.
 
 `finalStatus`: `done` with g ≥ 0.8 → `done`; `done` with 0.3 < g < 0.8 → `unverified`; `done` with g ≤ 0.3 → `gave_up`; `gave_up` → `gave_up`; `cap` → `done` if g ≥ 0.8 else `gave_up`; `stopped` → `stopped`.
 
@@ -379,6 +383,7 @@ test('executor errors are not friction; judgments and measurements are', () => {
   assert.deepEqual(frictionFromStep(dec(), { ok:false, reason:'detached' }, getAvatar('dev')!, ''), [])
   assert.equal(frictionFromStep(dec({ focus_visible:0.1 }), { ok:true }, getAvatar('ren')!, '')[0].severity, 'major')
   assert.deepEqual(frictionFromStep(dec({ focus_visible:0.9 }), { ok:true }, getAvatar('ren')!, ''), [])
+  assert.equal(frictionFromStep(dec({ content_clear:0.2 }), { ok:true }, getAvatar('dev')!, '')[0].description, 'Content unclear for this user')
   const small = frictionFromStep(dec({ target_too_small:0.2 }), { ok:true, box:{x:0,y:0,width:30,height:30} }, getAvatar('mika')!, '')
   assert.equal(small[0].measured, '30×30px'); assert.equal(small[0].severity, 'minor')
   assert.match(frictionFromStep(dec(), { ok:true }, getAvatar('ava')!, '- button\n- link "Go"')[0].description, /1 unnamed/)
@@ -481,14 +486,14 @@ export function loadPrinciples(path?:string): { source:'loaded'|'pending'; text:
 // report.ts
 export type Cluster = { key:string; pageUrl:string; element?:string; severity:Severity; avatarIds:AvatarId[]; stepRefs:StepRef[]; screenshot:string|null; treeExcerpt?:string; box?:Box; description:string }
 export function clusterFriction(run:Run): Cluster[]     // key = pathname|element|description; severity = max; sorted blocker>major>minor then avatar count desc
-export function fallbackReport(run:Run, clusters:Cluster[], source:'loaded'|'pending', reason:string): Report   // overallScore null, unableToRateReason = reason, issues from clusters with template fix prompts ('Principle: source pending')
-export function validateReport(raw:unknown, clusters:Cluster[], source:'loaded'|'pending'): { ok:true; value:Pick<Report,'overallScore'|'assessment'|'recommendations'|'issues'> } | { ok:false; reason:string }
+export function fallbackReport(run:Run, clusters:Cluster[], source:'loaded'|'pending', reason:string): Report   // overallScore null, unableToRateReason = reason, issues from clusters with template fix prompts ('Principle: source pending'), avatarNotes templated from status ("Lola gave up after 6 steps on /pricing")
+export function validateReport(raw:unknown, clusters:Cluster[], source:'loaded'|'pending', avatarIds:AvatarId[]): { ok:true; value:Pick<Report,'overallScore'|'assessment'|'avatarNotes'|'recommendations'|'issues'> } | { ok:false; reason:string }
 export async function buildReport(run:Run, deps?:{ summarizeImpl?:typeof summarize; principles?:ReturnType<typeof loadPrinciples> }): Promise<Report>
 ```
 
-`validateReport` rejects when: `overallScore` is not an integer in 1–10 and not null; any issue `clusterKey` is unknown; any recommendation `issueIds` entry is unknown; more than 3 recommendations; a `principle` is present while `source === 'pending'` (strip it and continue, do not reject). Enforce: any `blocker` issue → score `min(score, 6)`. Every issue carries its cluster's `severity`, `avatarIds`, `pageUrl`, `stepRefs`, `screenshot`, `treeExcerpt`, `element`, `box`. When `source === 'pending'` and the assessment lacks the phrase `UI/UX principles source pending`, append it.
+`validateReport` rejects when: `overallScore` is not an integer in 1–10 and not null; `avatarNotes` is missing an entry for any selected avatar (fill the gap with a templated note from the avatar's status rather than rejecting); any issue `clusterKey` is unknown; any recommendation `issueIds` entry is unknown; more than 3 recommendations; a `principle` is present while `source === 'pending'` (strip it and continue, do not reject). Enforce: any `blocker` issue → score `min(score, 6)`. Every issue carries its cluster's `severity`, `avatarIds`, `pageUrl`, `stepRefs`, `screenshot`, `treeExcerpt`, `element`, `box`. When `source === 'pending'` and the assessment lacks the phrase `UI/UX principles source pending`, append it.
 
-`buildReport`: `partial` = any avatar `stopped`/`failed` or run was `stopping`; if every avatar is `failed` → fallback with reason `"all avatars failed: " + reasons`. Prompt = principles text (or "UI/UX principles source pending"), the score anchors table and the sentence "An observed blocker in a tested interaction mode rules out the 7–10 range", the fix-prompt template verbatim from the spec, goal/url, each avatar's outcome and step log (label, url, friction, executorError kept separate and marked "technical, not usability"), and the clusters with keys. Schema: `{ overallScore: integer|null, unableToRateReason?: string, assessment: string, recommendations: [{title, why, avatarIds, issueIds, principle?}], issues: [{clusterKey, description, severity, principle?, fixPrompt}] }`. On `summarize` throw or validation failure → `fallbackReport` with the reason. `succeeded` = avatars with status `done`; `medianSteps`; `worstBlocker` = first blocker's description.
+`buildReport`: `partial` = any avatar `stopped`/`failed` or run was `stopping`; if every avatar is `failed` → fallback with reason `"all avatars failed: " + reasons`. Prompt = principles text (or "UI/UX principles source pending"), the score anchors table and the sentence "An observed blocker in a tested interaction mode rules out the 7–10 range", the fix-prompt template verbatim from the spec, goal/url, each avatar's outcome and step log (label, url, friction, executorError kept separate and marked "technical, not usability"), and the clusters with keys. Schema: `{ overallScore: integer|null, unableToRateReason?: string, assessment: string, avatarNotes: [{avatarId, note}], recommendations: [{title, why, avatarIds, issueIds, principle?}], issues: [{clusterKey, description, severity, principle?, fixPrompt}] }`. The prompt instructs: one note per selected avatar saying where they got to and, if they did not finish or flagged "Content unclear for this user", what they could not find or understand; and for any unclear-content finding, a recommendation that describes the improved step the site should offer (clearer plan names, a one-line summary under each price, a plainer button label). On `summarize` throw or validation failure → `fallbackReport` with the reason. `succeeded` = avatars with status `done`; `medianSteps`; `worstBlocker` = first blocker's description.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -507,13 +512,14 @@ test('clusterFriction merges same path, element and problem; max severity; block
 })
 test('validateReport enforces range, references, blocker cap and pending principles', () => {
   const clusters = clusterFriction(run); const key = clusters[0].key
-  const good = { overallScore: 8, assessment:'ok', recommendations:[{ title:'t', why:'w', avatarIds:['lola'], issueIds:[key], principle:'Nielsen 1' }], issues:[{ clusterKey:key, description:'d', severity:'blocker', principle:'Nielsen 1', fixPrompt:'f' }] }
-  const v = validateReport(good, clusters, 'pending'); assert.ok(v.ok)
-  if (v.ok) { assert.equal(v.value.overallScore, 6); assert.equal(v.value.issues[0].principle, undefined); assert.match(v.value.assessment, /principles source pending/) }
-  assert.equal(validateReport({ ...good, overallScore: 11 }, clusters, 'loaded').ok, false)
-  assert.equal(validateReport({ ...good, overallScore: '7' }, clusters, 'loaded').ok, false)
-  assert.equal(validateReport({ ...good, issues:[{ ...good.issues[0], clusterKey:'nope' }] }, clusters, 'loaded').ok, false)
-  assert.equal(validateReport({ ...good, recommendations:[{ ...good.recommendations[0], issueIds:['nope'] }] }, clusters, 'loaded').ok, false)
+  const good = { overallScore: 8, assessment:'ok', avatarNotes:[{ avatarId:'lola', note:'Reached Pricing but the plan names did not say what she would get' }], recommendations:[{ title:'t', why:'w', avatarIds:['lola'], issueIds:[key], principle:'Nielsen 1' }], issues:[{ clusterKey:key, description:'d', severity:'blocker', principle:'Nielsen 1', fixPrompt:'f' }] }
+  const v = validateReport(good, clusters, 'pending', ['lola','ren']); assert.ok(v.ok)
+  if (v.ok) { assert.equal(v.value.avatarNotes.length, 2); assert.match(v.value.avatarNotes[1].note, /done/i); assert.equal(v.value.overallScore, 6); assert.equal(v.value.issues[0].principle, undefined); assert.match(v.value.assessment, /principles source pending/) }
+  const ids:any = ['lola','ren']
+  assert.equal(validateReport({ ...good, overallScore: 11 }, clusters, 'loaded', ids).ok, false)
+  assert.equal(validateReport({ ...good, overallScore: '7' }, clusters, 'loaded', ids).ok, false)
+  assert.equal(validateReport({ ...good, issues:[{ ...good.issues[0], clusterKey:'nope' }] }, clusters, 'loaded', ids).ok, false)
+  assert.equal(validateReport({ ...good, recommendations:[{ ...good.recommendations[0], issueIds:['nope'] }] }, clusters, 'loaded', ids).ok, false)
 })
 test('loadPrinciples is pending for missing file, placeholder headings, or TBD', () => {
   const dir = mkdtempSync(join(tmpdir(), 'ux-')); const p = join(dir, 'SKILL.md')
@@ -525,6 +531,7 @@ test('loadPrinciples is pending for missing file, placeholder headings, or TBD',
 test('buildReport never invents a score when the summarizer fails', async () => {
   const r = await buildReport(run, { summarizeImpl: (async () => { throw new Error('down') }) as any, principles:{ source:'pending', text:'' } })
   assert.equal(r.overallScore, null); assert.match(r.unableToRateReason!, /down/); assert.equal(r.succeeded, 1); assert.equal(r.total, 2); assert.equal(r.issues.length, 1); assert.match(r.issues[0].fixPrompt, /Principle: source pending/)
+  assert.equal(r.avatarNotes.length, 2)
 })
 ```
 
