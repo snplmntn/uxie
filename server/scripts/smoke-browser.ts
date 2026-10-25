@@ -9,6 +9,13 @@ for (const avatar of AVATARS) {
   if (avatar.browser.keyboardOnly) {
     await page.keyboard.press('Tab')
     console.log(avatar.id, 'after Tab focused', (await captureState(page, avatar, `runs/smoke/${avatar.id}-tab.png`)).focused)
+    // Focused containers must not report a descendant: expect none for each
+    await page.evaluate(() => document.body.insertAdjacentHTML('beforeend',
+      '<div id="wrap" tabindex="-1"><a href="#">Inner</a></div><main id="main" tabindex="-1"><a href="#">In main</a></main><h2 id="h" tabindex="-1">Heading</h2>'))
+    for (const sel of ['#wrap', '#main', '#h']) {
+      await page.focus(sel)
+      console.log(avatar.id, `focused ${sel}`, (await captureState(page, avatar, `runs/smoke/${avatar.id}-tab.png`)).focused)
+    }
   }
   await context.close()
 }
