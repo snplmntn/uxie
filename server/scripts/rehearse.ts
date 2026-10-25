@@ -5,7 +5,7 @@ import { homedir } from 'node:os'
 import { execFileSync } from 'node:child_process'
 import type { Report, RunEvent } from '../src/types.ts'
 
-process.env.PORT = '4100'
+process.env.PORT ||= '4100'
 const { RUNS_DIR } = await import('../src/run.ts')
 await import('../src/index.ts')
 const base = 'http://localhost:4100'
@@ -70,7 +70,7 @@ for (const a of report.avatars) console.log(`- ${a.avatarId}: ${a.status}, ${a.s
 console.log('Top issues:')
 for (const is of report.issues.slice(0, 3)) console.log(`- [${is.severity}] ${is.description}${is.element ? ` (element: ${is.element})` : ''}`)
 
-const desk = `${homedir()}/Desktop/uxie-rehearsal`
+const desk = `${homedir()}/Desktop/${process.env.OUT || 'uxie-rehearsal'}`
 rmSync(desk, { recursive:true, force:true })
 mkdirSync(desk, { recursive:true })
 const pngs = readdirSync(`${RUNS_DIR}${runId}`).filter(f => f.endsWith('.png'))
