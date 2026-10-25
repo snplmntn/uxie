@@ -9,6 +9,11 @@ const run:any = { id:'r', url:'https://a.com', goal:'Find the pricing', status:'
 test('clusterFriction merges same path, element and problem; max severity; blockers first', () => {
   const c = clusterFriction(run); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker'); assert.deepEqual(c[0].avatarIds.sort(), ['lola','ren']); assert.equal(c[0].stepRefs.length, 2)
 })
+test('clusterFriction promotes majors in a friction-floor give-up streak to blocker', () => {
+  const f = [{ severity:'major', description:'Hard to read', element:'link|Pricing|0' }]
+  const r:any = { ...run, avatars:{ lola:{ ...run.avatars.lola, reason:'friction floor', steps:[1,2,3,4].map(n => step('lola', n, 'https://a.com/pricing', f)) } } }
+  const c = clusterFriction(r); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker')
+})
 test('validateReport enforces range, references, blocker cap and pending principles', () => {
   const clusters = clusterFriction(run); const key = clusters[0].key
   const good = { overallScore: 8, assessment:'ok', avatarNotes:[{ avatarId:'lola', note:'Reached Pricing but the plan names did not say what she would get' }], recommendations:[{ title:'t', why:'w', avatarIds:['lola'], issueIds:[key], principle:'Nielsen 1' }], issues:[{ clusterKey:key, description:'d', severity:'blocker', principle:'Nielsen 1', fixPrompt:'f' }] }

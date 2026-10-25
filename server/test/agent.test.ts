@@ -5,8 +5,9 @@ import { getAvatar } from '../src/avatars.ts'
 const dec = (j:Record<string,number> = {}) => ({ candidate:{value:'click_0',description:'click link "x"',action:{kind:'click',ref:'link|x|0',label:'x'}}, confidence:0.9, probabilities:[], goalReached:0, judgments:j }) as any
 test('executor errors are not friction; judgments and measurements are', () => {
   assert.deepEqual(frictionFromStep(dec(), { ok:false, reason:'detached' }, getAvatar('dev')!, ''), [])
-  assert.equal(frictionFromStep(dec({ focus_visible:0.1 }), { ok:true }, getAvatar('ren')!, '')[0].severity, 'major')
-  assert.deepEqual(frictionFromStep(dec({ focus_visible:0.9 }), { ok:true }, getAvatar('ren')!, ''), [])
+  assert.equal(frictionFromStep(dec({ focus_visible:0.1 }), { ok:true }, getAvatar('ren')!, '', 'link|Pricing')[0].severity, 'major')
+  assert.deepEqual(frictionFromStep(dec({ focus_visible:0.9 }), { ok:true }, getAvatar('ren')!, '', 'link|Pricing'), [])
+  assert.deepEqual(frictionFromStep(dec({ focus_visible:0.1 }), { ok:true }, getAvatar('ren')!, '', 'none'), [])
   assert.equal(frictionFromStep(dec({ content_clear:0.2 }), { ok:true }, getAvatar('dev')!, '')[0].description, 'Content unclear for this user')
   const small = frictionFromStep(dec({ target_too_small:0.2 }), { ok:true, box:{x:0,y:0,width:30,height:30} }, getAvatar('mika')!, '')
   assert.equal(small[0].measured, '30×30px'); assert.equal(small[0].severity, 'minor')

@@ -14,14 +14,21 @@ const path = (url:string) => { try { return new URL(url).pathname } catch { retu
 
 export function clusterFriction(run:Run): Cluster[] {
   const byKey = new Map<string, Cluster>()
-  for (const a of Object.values(run.avatars)) for (const s of a.steps) for (const f of s.friction) {
-    const key = `${path(s.url)}|${f.element ?? ''}|${f.description}`
-    let c = byKey.get(key)
-    if (!c) byKey.set(key, c = { key, pageUrl:s.url, element:f.element, severity:f.severity, avatarIds:[], stepRefs:[], screenshot:s.screenshot, treeExcerpt:s.treeExcerpt, box:f.box ?? s.box, description:f.description })
-    if (RANK[f.severity] < RANK[c.severity]) c.severity = f.severity
-    if (!c.avatarIds.includes(s.avatarId)) c.avatarIds.push(s.avatarId)
-    if (!c.stepRefs.some(r => r.avatarId === s.avatarId && r.n === s.n)) c.stepRefs.push({ avatarId:s.avatarId, n:s.n })
-    c.screenshot ??= s.screenshot
+  for (const a of Object.values(run.avatars)) {
+    // A friction-floor give-up proves the trailing streak blocked the task: promote its majors.
+    const promoted = new Set<object>()
+    if (a.status === 'gave_up' && a.reason === 'friction floor')
+      for (let i = a.steps.length - 1; i >= 0 && promoted.size < (getAvatar(a.avatarId)?.giveUpAfter ?? 0) && a.steps[i].friction.some(f => f.severity !== 'minor'); i--) promoted.add(a.steps[i])
+    for (const s of a.steps) for (const raw of s.friction) {
+      const f = promoted.has(s) && raw.severity === 'major' ? { ...raw, severity:'blocker' as const } : raw
+      const key = `${path(s.url)}|${f.element ?? ''}|${f.description}`
+      let c = byKey.get(key)
+      if (!c) byKey.set(key, c = { key, pageUrl:s.url, element:f.element, severity:f.severity, avatarIds:[], stepRefs:[], screenshot:s.screenshot, treeExcerpt:s.treeExcerpt, box:f.box ?? s.box, description:f.description })
+      if (RANK[f.severity] < RANK[c.severity]) c.severity = f.severity
+      if (!c.avatarIds.includes(s.avatarId)) c.avatarIds.push(s.avatarId)
+      if (!c.stepRefs.some(r => r.avatarId === s.avatarId && r.n === s.n)) c.stepRefs.push({ avatarId:s.avatarId, n:s.n })
+      c.screenshot ??= s.screenshot
+    }
   }
   return [...byKey.values()].sort((x, y) => RANK[x.severity] - RANK[y.severity] || y.avatarIds.length - x.avatarIds.length)
 }
@@ -163,7 +170,7 @@ function buildSchema(run:Run, clusters:Cluster[]): object {
     overallScore:{ type:['integer', 'null'] }, unableToRateReason:nstr, assessment:{ type:'string' },
     avatarNotes:{ type:'array', items:obj({ avatarId:ids, note:{ type:'string' } }) },
     recommendations:{ type:'array', items:obj({ title:{ type:'string' }, why:{ type:'string' }, avatarIds:{ type:'array', items:ids }, issueIds:{ type:'array', items:key }, principle:nstr }) },
-    issues:{ type:'array', items:obj({ clusterKey:key, description:{ type:'string' }, severity:{ type:'string', enum:['blocker', 'major', 'minor'] }, principle:nstr, fixPrompt:{ type:'string' } }) },
+    issues:{ type:'array', items:obj({ clusterKey:key, description:{ type:'string' }, principle:nstr, fixPrompt:{ type:'string' } }) },
   })
 }
 

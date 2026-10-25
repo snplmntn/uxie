@@ -4,7 +4,7 @@ const EVIDENCE = 'Findings must reference the observed page and actions; your li
 
 export const SHARED_JUDGMENTS: Judgment[] = [{
   name: 'content_clear', type: 'predicate',
-  instructions: 'Would this user understand what this page is telling them in relation to the goal, for example what each plan includes and costs?',
+  instructions: 'Can this user understand the content and controls on this page well enough to choose their next step toward the goal? Answer low only if wording, labels, or structure on this page would confuse this specific user. Do not answer low merely because the goal is not yet reached on this page.',
   frictionWhen: v => v <= 0.3, severity: 'minor', description: 'Content unclear for this user',
 }]
 

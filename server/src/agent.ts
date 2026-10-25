@@ -13,10 +13,12 @@ export type AgentCtx = { runId:string; url:string; goal:string; avatar:Avatar; r
 
 const MAX_STEPS = 25, MAX_MS = 240_000, MIN_TARGET = 44
 
-export function frictionFromStep(decision:Decision, exec:ExecResult, avatar:Avatar, snapshot:string): Friction[] {
+export function frictionFromStep(decision:Decision, exec:ExecResult, avatar:Avatar, snapshot:string, focused?:string): Friction[] {
   if (!exec.ok) return []
   const out: Friction[] = []
   for (const j of [...SHARED_JUDGMENTS, ...avatar.judgments]) {
+    // Focus visibility is only judgeable once a Tab has landed on something.
+    if (j.name === 'focus_visible' && (!focused || focused === 'none')) continue
     const v = decision.judgments[j.name]
     if (j.name === 'target_too_small' && exec.box) {
       // A measured box overrides the model's guess either way.
@@ -88,7 +90,7 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
       const exec: ExecResult = terminal ? { ok:true } : await applyAction(page, action, avatar)
       const step: Step = {
         avatarId:avatar.id, n, url:state.url, title:state.title, action, label:labelFor(action, avatar),
-        screenshot:`/screenshots/${ctx.runId}/${file}`, friction:frictionFromStep(decision, exec, avatar, state.snapshot),
+        screenshot:`/screenshots/${ctx.runId}/${file}`, friction:frictionFromStep(decision, exec, avatar, state.snapshot, state.focused),
         confidence:decision.confidence, judgments:decision.judgments, goalReached:decision.goalReached, at:new Date().toISOString(),
       }
       if (avatar.browser.noScreenshot) step.treeExcerpt = state.snapshot.slice(0, 1500)

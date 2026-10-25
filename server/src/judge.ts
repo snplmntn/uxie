@@ -40,11 +40,19 @@ const limit = semaphore(5)
 async function post(url:string, body:object, fetchImpl:typeof fetch|undefined, label:string): Promise<any> {
   const f = fetchImpl ?? fetch
   for (let attempt = 0; ; attempt++) {
-    const res = await limit(() => f(url, {
-      method:'POST',
-      headers:{ 'content-type':'application/json', authorization:`Bearer ${process.env.OPENAI_API_KEY}` },
-      body:JSON.stringify(body),
-    }))
+    let res: Response
+    try {
+      res = await limit(() => f(url, {
+        method:'POST',
+        headers:{ 'content-type':'application/json', authorization:`Bearer ${process.env.OPENAI_API_KEY}` },
+        body:JSON.stringify(body),
+      }))
+    } catch (e) {
+      // Connection reset / DNS failure: retry like a 5xx.
+      if (attempt >= 2) throw new Error(`${label} network: ${(e as Error)?.message ?? String(e)}`)
+      if (!fetchImpl) await new Promise(r => setTimeout(r, 500 * 2 ** attempt))
+      continue
+    }
     if (res.ok) return res.json()
     const retryable = res.status === 429 || res.status >= 500
     if (!retryable || attempt >= 2) throw new Error(`${label} ${res.status}`)

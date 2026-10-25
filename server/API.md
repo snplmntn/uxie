@@ -40,9 +40,9 @@ data: <RunEvent as JSON>
 
 On connect the server first replays the current state, then streams live events:
 
-1. one `run_status` with the current status,
-2. for each avatar (in request order): every existing `step`, then one `avatar_status` with its current status (`running` if still going),
-3. the `report`, if the run already finished.
+1. for each avatar (in request order): every existing `step`, then one `avatar_status` with its current status (`running` if still going),
+2. the `report`, if the run already finished,
+3. one `run_status` with the current status, last, so a client that closes on `finished` has already received the report.
 
 Live events follow. A new run emits `avatar_status: running` for every avatar, then `step` events as avatars act, one final `avatar_status` per avatar, a `run_status: stopping` if stopped, and when every avatar has ended: **`report` first, then `run_status: finished`**. While the report is being generated the run status stays `running` (or `stopping`), so `finished` is never visible without a report. The server keeps the connection open after that; close your `EventSource` when you receive `run_status: finished` (otherwise the browser reconnects and receives the replay again).
 

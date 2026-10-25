@@ -29,12 +29,13 @@ app.get('/runs/:id/events', c => {
   if (!run) return c.json({ error:'run not found' }, 404)
   return streamSSE(c, async stream => {
     // Snapshot and subscribe synchronously so no event falls between replay and live.
-    const queue: RunEvent[] = [{ type:'run_status', status:run.status }]
+    const queue: RunEvent[] = []
     for (const a of Object.values(run.avatars)) {
       for (const step of a.steps) queue.push({ type:'step', step })
       queue.push({ type:'avatar_status', avatarId:a.avatarId, status:a.status, ...(a.reason ? { reason:a.reason } : {}) })
     }
     if (run.report) queue.push({ type:'report', report:run.report })
+    queue.push({ type:'run_status', status:run.status })
     let wake: (() => void) | undefined
     const unsubscribe = subscribe(id, e => { queue.push(e); wake?.() })
     stream.onAbort(() => { unsubscribe(); wake?.() })
