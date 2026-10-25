@@ -3,7 +3,7 @@ import type { Browser, BrowserContext, Page } from 'playwright'
 import type { Avatar } from './types.ts'
 import { parseSnapshot } from './candidates.ts'
 
-export type PageState = { url:string; title:string; snapshot:string; pageText?:string; screenshotB64?:string; focused?:string }
+export type PageState = { url:string; title:string; snapshot:string; pageText?:string; screenshotB64?:string; focused?:string; scrollY:number }
 
 let browserPromise: Promise<Browser> | undefined
 
@@ -48,7 +48,7 @@ export async function captureState(page:Page, avatar:Avatar, screenshotPath:stri
     await page.waitForTimeout(600)
     shot = await page.screenshot({ path: screenshotPath, timeout: 20_000 })
   }
-  const state: PageState = { url: page.url(), title: await page.title(), snapshot: await page.locator('body').ariaSnapshot() }
+  const state: PageState = { url: page.url(), title: await page.title(), snapshot: await page.locator('body').ariaSnapshot(), scrollY: await page.evaluate(() => Math.round(scrollY)).catch(() => 0) }
   if (b.noScreenshot) state.pageText = (await page.locator('body').innerText()).slice(0, 4000)
   else state.screenshotB64 = shot.toString('base64')
   if (b.keyboardOnly) {

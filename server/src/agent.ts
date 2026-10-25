@@ -93,15 +93,15 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
           screenshotB64:state.screenshotB64, focused:state.focused, history:run.steps.map(s => s.focused ? `${s.label} → focus on ${s.focused}` : s.label), candidates:buildCandidates(state.snapshot, avatar) })
       } catch (e) { end('failed', (e as Error).message); break }
       const action: Action = decision.candidate.action
-      const sig = `${state.url}|${state.focused ?? ''}|${JSON.stringify(action)}`
-      if (run.steps.filter(s => `${s.url}|${s.focused ?? ''}|${JSON.stringify(s.action)}` === sig).length >= 2) {
+      const sig = `${state.url}|${state.scrollY}|${state.focused ?? ''}|${JSON.stringify(action)}`
+      if (run.steps.filter(s => `${s.url}|${s.scrollY}|${s.focused ?? ''}|${JSON.stringify(s.action)}` === sig).length >= 2) {
         // Third identical decision from an identical state: the agent is looping, not the site blocking it.
         end('gave_up', 'loop'); break
       }
       const terminal = action.kind === 'done' || action.kind === 'give_up'
       const exec: ExecResult = terminal ? { ok:true } : await applyAction(page, action, avatar)
       const step: Step = {
-        avatarId:avatar.id, n, url:state.url, title:state.title, action, label:labelFor(action, avatar), ...(state.focused ? { focused:state.focused } : {}),
+        avatarId:avatar.id, n, url:state.url, title:state.title, action, label:labelFor(action, avatar), scrollY:state.scrollY, ...(state.focused ? { focused:state.focused } : {}),
         screenshot:`/screenshots/${ctx.runId}/${file}`, friction:frictionFromStep(decision, exec, avatar, state.snapshot, state.focused, run.steps.some(s => s.url === state.url)),
         confidence:decision.confidence, judgments:decision.judgments, goalReached:decision.goalReached, at:new Date().toISOString(),
       }
