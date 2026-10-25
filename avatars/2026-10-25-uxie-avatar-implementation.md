@@ -1,6 +1,6 @@
 # Uxie Avatar Implementation Guide
 
-This guide and [`2026-10-25-uxie-avatars.json`](./2026-10-25-uxie-avatars.json) are the implementation handoff for the five MVP avatar profiles. The current canonical behavior and report requirements remain in [`docs/superpowers/specs/2026-10-25-uxie-design.md`](./docs/superpowers/specs/2026-10-25-uxie-design.md); the backend task breakdown is in [`docs/superpowers/plans/2026-10-25-uxie-backend.md`](./docs/superpowers/plans/2026-10-25-uxie-backend.md).
+This guide and [`2026-10-25-uxie-avatars.json`](./2026-10-25-uxie-avatars.json) are the implementation handoff for the five MVP avatar profiles. The current canonical behavior and report requirements remain in [`../docs/superpowers/specs/2026-10-25-uxie-design.md`](../docs/superpowers/specs/2026-10-25-uxie-design.md); the backend task breakdown is in [`../docs/superpowers/plans/2026-10-25-uxie-backend.md`](../docs/superpowers/plans/2026-10-25-uxie-backend.md).
 
 ## Product and model loop
 

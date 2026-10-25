@@ -41,7 +41,7 @@
 **Files:**
 - Create: `server/package.json`, `server/tsconfig.json`, `server/.env.example`
 - Create: `server/src/types.ts`, `server/src/avatars.ts`
-- Read: `2026-10-25-uxie-avatars.json` as the source for avatar profile data; do not keep a second hand-written roster.
+- Read: `avatars/2026-10-25-uxie-avatars.json` as the source for avatar profile data; do not keep a second hand-written roster.
 - Test: `server/test/avatars.test.ts`
 
 **Interfaces:**
@@ -111,7 +111,7 @@ export type RunEvent =
   | { type:'report'; report:Report }
 ```
 
-- Produces `server/src/avatars.ts`: load and validate `2026-10-25-uxie-avatars.json`, map its declarative profile/judgment fields to `export const AVATARS: Avatar[]` (spec order), and export `getAvatar(id:string): Avatar | undefined` plus `SHARED_JUDGMENTS: Judgment[]` (`content_clear` for every avatar). Keep executable predicates in TypeScript; never interpret JSON persona text as action authorization.
+- Produces `server/src/avatars.ts`: load and validate `avatars/2026-10-25-uxie-avatars.json`, map its declarative profile/judgment fields to `export const AVATARS: Avatar[]` (spec order), and export `getAvatar(id:string): Avatar | undefined` plus `SHARED_JUDGMENTS: Judgment[]` (`content_clear` for every avatar). Keep executable predicates in TypeScript; never interpret JSON persona text as action authorization.
 
 - [ ] **Step 1: Create the package**
 
