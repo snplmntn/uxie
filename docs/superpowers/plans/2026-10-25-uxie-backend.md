@@ -41,6 +41,7 @@
 **Files:**
 - Create: `server/package.json`, `server/tsconfig.json`, `server/.env.example`
 - Create: `server/src/types.ts`, `server/src/avatars.ts`
+- Read: `2026-10-25-uxie-avatars.json` as the source for avatar profile data; do not keep a second hand-written roster.
 - Test: `server/test/avatars.test.ts`
 
 **Interfaces:**
@@ -59,12 +60,18 @@ export type BrowserConfig = {
   keyboardOnly?: boolean        // Ren
   noScreenshot?: boolean        // Ava: model gets tree + text only
 }
+export type InteractionConstraints = {
+  activationMode:'standard-desktop'|'touch'|'keyboard'|'accessibility-reference'
+  allowedKeys?:string[]; pointer?:boolean; hover?:boolean; rightClick?:boolean
+  coordinateFallback?:boolean; injectMissedTaps?:boolean
+  targetMustAppearInProvidedInputs?:boolean; modelReceivesScreenshot?:boolean
+}
 export type Judgment = {
   name:string; type:'predicate'|'score'; instructions:string
   levels?: { label:string; description:string }[]
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
-export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
+export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; interactionConstraints:InteractionConstraints; giveUpAfter:number; judgments:Judgment[] }
 export const SHARED_JUDGMENTS: Judgment[]   // defined in avatars.ts; content_clear for every avatar
 export type Action =
   | { kind:'click'; ref:string; label:string }
@@ -101,7 +108,7 @@ export type RunEvent =
   | { type:'report'; report:Report }
 ```
 
-- Produces `server/src/avatars.ts`: `export const AVATARS: Avatar[]` (spec order), `export function getAvatar(id:string): Avatar | undefined`, and `export const SHARED_JUDGMENTS: Judgment[]` (one entry, `content_clear`, asked for every avatar in addition to `avatar.judgments`).
+- Produces `server/src/avatars.ts`: load and validate `2026-10-25-uxie-avatars.json`, map its declarative profile/judgment fields to `export const AVATARS: Avatar[]` (spec order), and export `getAvatar(id:string): Avatar | undefined` plus `SHARED_JUDGMENTS: Judgment[]` (`content_clear` for every avatar). Keep executable predicates in TypeScript; never interpret JSON persona text as action authorization.
 
 - [ ] **Step 1: Create the package**
 
@@ -115,6 +122,9 @@ import { test } from 'node:test'; import assert from 'node:assert/strict'
 import { AVATARS, getAvatar, SHARED_JUDGMENTS } from '../src/avatars.ts'
 test('five avatars in spec order with persona, viewport and give-up floor', () => {
   assert.deepEqual(AVATARS.map(a => a.id), ['lola','mika','dev','ren','ava'])
+  assert.equal(getAvatar('mika')!.interactionConstraints.activationMode, 'touch')
+  assert.equal(getAvatar('ren')!.interactionConstraints.activationMode, 'keyboard')
+  assert.equal(getAvatar('ava')!.interactionConstraints.modelReceivesScreenshot, false)
   for (const a of AVATARS) { assert.ok(a.persona.length > 100); assert.ok(a.browser.viewport.width > 0); assert.ok(a.tagline && a.whatChanges) }
 })
 test('spec-pinned mechanics', () => {
@@ -172,7 +182,7 @@ git commit -m "feat(server): scaffold package, contract types and five avatars"
   - `export type Node = { role:string; name:string; index:number }`
   - `export function parseSnapshot(yaml:string): Node[]` — interactive nodes in document order; `index` = 0-based occurrence of the same role+name pair.
   - `export function refFor(n:Node): string` → `` `${role}|${name}|${index}` ``.
-  - `export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[]` — ≤ 40. It is the only source of model-selectable actions: materialize actions from the backend-owned registry, then filter by avatar mode. Element actions only for **named** eligible nodes (`click_<i>`, description `click <role> "<name>"`; Mika's description says `tap`); exclude submit, destructive, purchase, and other consequential controls. Every candidate carries its registry-derived mode and risk. Always ends with `scroll_down`, `scroll_up`, `press_escape`, `done`, `give_up`. Ren: `press_tab`, `press_shift_tab`, `press_enter`, `press_space`, `press_arrowdown`, `press_arrowup`, `press_escape`, `done`, `give_up` and nothing else. Trimming drops element actions from the end. `ponytail:` document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions.
+  - `export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[]` — ≤ 40. It is the only source of model-selectable actions: materialize actions from the backend-owned registry, then filter by `avatar.interactionConstraints`. Element actions only for **named** eligible nodes (`click_<i>`, description `click <role> "<name>"`; Mika's description says `tap`); exclude submit, destructive, purchase, and other consequential controls. Every candidate carries its registry-derived mode and risk. Standard profiles also get `scroll_down`, `scroll_up`, `press_escape`, `done`, `give_up`. Ren gets `press_tab`, `press_shift_tab`, `press_enter`, `press_space`, all four arrow keys, `press_escape`, `done`, `give_up` and nothing else. Trimming drops element actions from the end. `ponytail:` document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions.
   - `export function unnamedControls(snapshot:string): number` — count of interactive nodes with empty name (Ava's evidence).
 
 Interactive roles: `link button textbox searchbox combobox checkbox radio menuitem tab switch option`. Grammar: `- role "name"`, `- role "name" [attrs]`, `- role "name":`, `- role:`/`- role`, nested indentation, `- /url:` lines ignored.
@@ -211,7 +221,7 @@ test('buildCandidates: named clicks only, control actions last, cap 40, Mika tap
 })
 test('Ren gets the permitted key presses only', () => {
   const c = buildCandidates(snap, getAvatar('ren')!)
-  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_escape','done','give_up'])
+  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_arrowleft','press_arrowright','press_escape','done','give_up'])
 })
 test('unnamedControls counts empty names', () => { assert.equal(unnamedControls(snap), 1) })
 ```
