@@ -6,7 +6,7 @@ export type StepInput = { avatar:Avatar; goal:string; url:string; title:string; 
 export type Decision = { candidate:Candidate; confidence:number; probabilities:{value:string;probability:number}[]; goalReached:number; judgments:Record<string,number> }
 
 const RULES = 'You are simulating one specific web user attempting a goal. Choose the single next action that this user, with their limits and habits, would most plausibly take. Choose done only if the goal is already achieved on this page. Choose give_up only if this user would leave.'
-const GOAL_REACHED = 'Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing.'
+const GOAL_REACHED = 'Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing. For a goal about finding a page, control, or route, that page or control must be visible now. For a goal about understanding or reading content, the content that answers it must be visible on this page.'
 
 const judgmentQuestion = (j:Judgment) => ({ name:j.name, type:j.type, instructions:j.instructions, ...(j.levels ? { levels:j.levels } : {}) })
 
