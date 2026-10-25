@@ -6,6 +6,8 @@ const dec = (j:Record<string,number> = {}) => ({ candidate:{value:'click_0',desc
 test('executor errors are not friction; judgments and measurements are', () => {
   assert.deepEqual(frictionFromStep(dec(), { ok:false, reason:'detached' }, getAvatar('dev')!, ''), [])
   assert.equal(frictionFromStep(dec({ content_clear:0.2 }), { ok:true }, getAvatar('dev')!, '')[0].description, 'Content unclear for this user')
+  assert.deepEqual(frictionFromStep(dec({ consent_choice_clear:0.1 }), { ok:true }, getAvatar('grace')!, '- link "Pricing"'), [])
+  assert.equal(frictionFromStep(dec({ consent_choice_clear:0.1 }), { ok:true }, getAvatar('grace')!, '- button "Accept all cookies"')[0].description, 'Privacy or consent choice is unclear')
   const small = frictionFromStep(dec({ target_too_small:0.2 }), { ok:true, box:{x:0,y:0,width:30,height:30} }, getAvatar('mika')!, '')
   assert.equal(small[0].measured, '30×30px'); assert.equal(small[0].severity, 'minor')
   assert.match(frictionFromStep(dec(), { ok:true }, getAvatar('ava')!, '- button\n- link "Go"')[0].description, /1 unnamed/)

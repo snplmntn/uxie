@@ -12,11 +12,14 @@ import { applyAction, labelFor } from './executor.ts'
 export type AgentCtx = { runId:string; url:string; goal:string; avatar:Avatar; runDir:string; isStopping:()=>boolean; emit:(e:RunEvent)=>void }
 
 const MAX_STEPS = 25, MAX_MS = 240_000, MIN_TARGET = 44
+const CONSENT_UI = /cookie|consent|gdpr|privacy (preference|setting|choice)/i
 
 export function frictionFromStep(decision:Decision, exec:ExecResult, avatar:Avatar, snapshot:string, focused?:string): Friction[] {
   if (!exec.ok) return []
   const out: Friction[] = []
   for (const j of [...SHARED_JUDGMENTS, ...avatar.judgments]) {
+    // A consent judgment only means something when a consent UI is actually on the page.
+    if (j.name === 'consent_choice_clear' && !CONSENT_UI.test(snapshot)) continue
     const v = decision.judgments[j.name]
     if (j.name === 'target_too_small' && exec.box) {
       // A measured box overrides the model's guess either way.

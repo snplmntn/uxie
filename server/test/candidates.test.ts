@@ -29,7 +29,7 @@ test('buildCandidates: named clicks only, control actions last, cap 40, Mika tap
 })
 test('Ava gets the permitted key presses only', () => {
   const c = buildCandidates(snap, getAvatar('ava')!)
-  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowup','press_arrowdown','press_arrowleft','press_arrowright','press_escape','done','give_up'])
+  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowup','press_arrowdown','press_arrowleft','press_arrowright','press_escape','press_alt_arrowleft','done','give_up'])
   assert.ok(c.every(x => ['press','done','give_up'].includes(x.action.kind)))
 })
 test('Grace never gets an accept-cookies candidate when a reject choice exists', () => {

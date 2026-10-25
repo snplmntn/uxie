@@ -145,7 +145,7 @@
       },
       "interactionConstraints": {
         "activationMode": "keyboard",
-        "allowedKeys": ["Tab", "Shift+Tab", "Enter", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Escape"],
+        "allowedKeys": ["Tab", "Shift+Tab", "Enter", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Escape", "Alt+ArrowLeft"],
         "pointer": false,
         "coordinateFallback": false,
         "targetMustAppearInProvidedInputs": true,
