@@ -33,6 +33,8 @@ const END: Candidate[] = [
 ]
 
 // ponytail: name heuristics for consent buttons; upgrade to banner-scoped detection if a site trips it
+// ponytail: name heuristic for consequential controls (submit/pay/delete); the executor has no form or payment actions either way
+const CONSEQUENTIAL = /^(submit|send|create account|create|pay|buy|purchase|checkout|place order|delete|remove|confirm|save)\b/i
 const ACCEPT = /\b(accept|allow|agree)\b/i, DECLINE = /\b(reject|decline|refuse|necessary|essential)\b/i
 
 export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[] {
@@ -47,7 +49,7 @@ export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[] {
   ]
   const verb = avatar.browser.touch ? 'tap' : 'click'
   // ponytail: document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions
-  let nodes = parseSnapshot(snapshot).filter(n => n.name)
+  let nodes = parseSnapshot(snapshot).filter(n => n.name && !(n.role === 'button' && CONSEQUENTIAL.test(n.name)))
   if (ic.neverAcceptOptionalCookies && nodes.some(n => DECLINE.test(n.name))) nodes = nodes.filter(n => !ACCEPT.test(n.name))
   const clicks = nodes.slice(0, MAX - tail.length).map((n, i): Candidate => ({
     value: `click_${i}`,

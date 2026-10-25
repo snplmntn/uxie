@@ -33,7 +33,7 @@ export async function applyAction(page:Page, action:Action, avatar:Avatar): Prom
     } else if (action.kind === 'scroll') {
       await page.mouse.wheel(0, action.direction === 'down' ? 600 : -600)
     } else if (action.kind === 'press') {
-      await (action.kind === 'press' && action.key === 'Alt+ArrowLeft' ? page.goBack({ waitUntil:'domcontentloaded' }).catch(() => null) : page.keyboard.press(action.key))
+      await (action.kind === 'press' && action.key === 'Alt+ArrowLeft' ? page.goBack({ waitUntil:'domcontentloaded' }).then(() => page.url() === 'about:blank' ? page.goForward({ waitUntil:'domcontentloaded' }) : null).catch(() => null) : page.keyboard.press(action.key))
     } else return result // done / give_up: nothing to do
     await page.waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})
     return result

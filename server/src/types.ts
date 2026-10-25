@@ -33,7 +33,7 @@ export type Action =
 export type Candidate = { value:string; description:string; action:Action }
 export type Friction = { severity:Severity; description:string; element?:string; box?:Box; measured?:string }
 export type Step = {
-  avatarId:AvatarId; n:number; url:string; title:string; action:Action; label:string
+  avatarId:AvatarId; n:number; url:string; title:string; action:Action; label:string; focused?:string
   screenshot:string|null; treeExcerpt?:string; box?:Box
   friction:Friction[]; executorError?:string; interruption?:string
   confidence:number; judgments:Record<string,number>; goalReached:number; at:string

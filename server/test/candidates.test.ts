@@ -43,4 +43,8 @@ test('parseSnapshot reads single-quoted keys', () => {
   assert.deepEqual(parseSnapshot(`- 'link "Note: x"'\n- 'button "It''s \\"on\\""'`).map(n => [n.role, n.name, n.index]),
     [['link','Note: x',0], ['button','It\'s "on"',0]])
 })
+test('consequential buttons are never candidates', () => {
+  const c = buildCandidates(`- button "Create account"\n- button "Submit"\n- link "Sign up"\n- button "Open menu"`, getAvatar('dev')!).map(x => x.description)
+  assert.ok(!c.some(d => /Create account|Submit/.test(d))); assert.ok(c.some(d => /Sign up/.test(d))); assert.ok(c.some(d => /Open menu/.test(d)))
+})
 test('unnamedControls counts empty names', () => { assert.equal(unnamedControls(snap), 1) })
