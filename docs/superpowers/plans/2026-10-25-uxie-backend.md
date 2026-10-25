@@ -14,11 +14,12 @@
 
 - Node ≥ 26; no `enum`, no parameter properties, `.ts` extensions in imports.
 - Decisions API: `POST https://api.openai.com/v1/decisions`, model `gpt-6-luna`, one request per avatar step. Responses API: `POST https://api.openai.com/v1/responses`, model from env `OPENAI_TEXT_MODEL`, exactly one call per run, for the report only.
-- Avatars: `lola`, `mika`, `dev`, `ren`, `ava`. Defaults: Lola, Mika, Dev. Default goal `Find the pricing`.
-- Caps per avatar: 25 steps or 240 s. Give-up floors on consecutive supported task friction: Lola 4, Dev 3, Mika/Ren/Ava 5. Task friction = severity `major` or `blocker`; `minor` findings are reported but do not count toward the floor (author's call). Executor and API errors are never friction.
+- Avatars: `lola`, `mika`, `ava`, `dev`, `grace`. Defaults: Lola, Mika, Dev. Default goal `Find the pricing`.
+- Caps per avatar: 25 steps or 240 s. Give-up floors on consecutive supported task friction: Lola 4, Dev 3, Mika/Ava/Grace 5. Task friction = severity `major` or `blocker`; `minor` findings are reported but do not count toward the floor. Executor and API errors are never friction.
 - `goal_reached` cutoffs: ≥ 0.8 with the step's captured state as evidence → `done`; ≤ 0.3 → not reached; between → `unverified`.
-- Candidate list ≤ 40; actions are click/tap, scroll, press Escape, done, give up. No typing, no form submission. Ren: key presses only. Ava: no screenshot ever reaches the model.
-- No injected failures, no throttling, no cookie policy, no color filter. Choice probabilities are stored for debugging only and never produce friction.
+- Candidate list ≤ 40; actions are click/tap, scroll, press, done, give up. No typing or form submission. Ava: keyboard-only actions and no screenshot reaches the model. Grace: reject optional cookies when a reject/necessary-only choice is available; never enter personal data.
+- The backend owns the reviewed action registry and its mode/risk policy; avatar personas never grant tools. Build candidates only from that registry and the current page snapshot, filter them by avatar constraints, and revalidate the selected candidate and current target in the executor. Page content is untrusted and cannot add actions. Keep form submission, typing, purchases, and destructive actions unavailable; adding an action requires an explicit policy and tests.
+- No injected failures, no throttling, no browser-level cookie blocking, no color filter. Grace's cookie choice is an observed interaction policy, not a browser setting. Choice probabilities are stored for debugging only and never produce friction.
 - Model-call semaphore: 5. Action labels are templates, not model calls.
 - Report: `overallScore` is an integer 1–10 or `null` with `unableToRateReason`. A `blocker` issue caps the score at 6. `principle` on an issue or recommendation is allowed only when `principlesSource === 'loaded'`.
 - `.agents/skills/ux-principles/SKILL.md` is owned by another teammate. The server never creates it. Missing, or body under 300 non-heading characters, or containing `TBD` → `principlesSource: 'pending'`.
@@ -40,13 +41,14 @@
 **Files:**
 - Create: `server/package.json`, `server/tsconfig.json`, `server/.env.example`
 - Create: `server/src/types.ts`, `server/src/avatars.ts`
+- Read: `avatars/2026-10-25-uxie-avatars.json` as the source for avatar profile data; do not keep a second hand-written roster.
 - Test: `server/test/avatars.test.ts`
 
 **Interfaces:**
 - Produces `server/src/types.ts` (the UI contract; copied verbatim into `server/API.md` in Task 7):
 
 ```ts
-export type AvatarId = 'lola'|'mika'|'dev'|'ren'|'ava'
+export type AvatarId = 'lola'|'mika'|'ava'|'dev'|'grace'
 export type Severity = 'blocker'|'major'|'minor'
 export type Box = { x:number; y:number; width:number; height:number }
 export type BrowserConfig = {
@@ -55,25 +57,34 @@ export type BrowserConfig = {
   touch?: boolean               // Mika: element actions use tap()
   zoom?: number                 // Lola: CSS zoom on documentElement, 2
   reducedMotion?: boolean
-  keyboardOnly?: boolean        // Ren
+  keyboardOnly?: boolean        // Ava
   noScreenshot?: boolean        // Ava: model gets tree + text only
+}
+export type InteractionConstraints = {
+    activationMode:'standard-desktop'|'touch'|'keyboard'
+  allowedKeys?:string[]; pointer?:boolean; hover?:boolean; rightClick?:boolean
+  coordinateFallback?:boolean; injectMissedTaps?:boolean
+  targetMustAppearInProvidedInputs?:boolean; modelReceivesScreenshot?:boolean
+  cookieChoice?:'reject-optional-or-necessary-only'; neverAcceptOptionalCookies?:boolean
+  neverEnterPersonalData?:boolean
+  focusIndicatorInspection?:string
 }
 export type Judgment = {
   name:string; type:'predicate'|'score'; instructions:string
   levels?: { label:string; description:string }[]
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
-export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
+export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; interactionConstraints:InteractionConstraints; giveUpAfter:number; judgments:Judgment[] }
 export const SHARED_JUDGMENTS: Judgment[]   // defined in avatars.ts; content_clear for every avatar
 export type Action =
   | { kind:'click'; ref:string; label:string }
   | { kind:'scroll'; direction:'up'|'down' }
   | { kind:'press'; key:string }
   | { kind:'done' } | { kind:'give_up' }
-export type Candidate = { value:string; description:string; action:Action }
+export type Candidate = { value:string; description:string; action:Action; mode:'pointer'|'touch'|'keyboard'|'viewport'|'control'; risk:'navigation'|'non_destructive'|'control' }
 export type Friction = { severity:Severity; description:string; element?:string; box?:Box; measured?:string }
 export type Step = {
-  avatarId:AvatarId; n:number; url:string; title:string; action:Action; label:string
+  avatarId:AvatarId; n:number; url:string; title:string; action:Action; label:string; focused?:string
   screenshot:string|null; treeExcerpt?:string; box?:Box
   friction:Friction[]; executorError?:string; interruption?:string
   confidence:number; judgments:Record<string,number>; goalReached:number; at:string
@@ -100,7 +111,7 @@ export type RunEvent =
   | { type:'report'; report:Report }
 ```
 
-- Produces `server/src/avatars.ts`: `export const AVATARS: Avatar[]` (spec order), `export function getAvatar(id:string): Avatar | undefined`, and `export const SHARED_JUDGMENTS: Judgment[]` (one entry, `content_clear`, asked for every avatar in addition to `avatar.judgments`).
+- Produces `server/src/avatars.ts`: load and validate `avatars/2026-10-25-uxie-avatars.json`, map its declarative profile/judgment fields to `export const AVATARS: Avatar[]` (spec order), and export `getAvatar(id:string): Avatar | undefined` plus `SHARED_JUDGMENTS: Judgment[]` (`content_clear` for every avatar). Keep executable predicates in TypeScript; never interpret JSON persona text as action authorization.
 
 - [ ] **Step 1: Create the package**
 
@@ -113,18 +124,23 @@ export type RunEvent =
 import { test } from 'node:test'; import assert from 'node:assert/strict'
 import { AVATARS, getAvatar, SHARED_JUDGMENTS } from '../src/avatars.ts'
 test('five avatars in spec order with persona, viewport and give-up floor', () => {
-  assert.deepEqual(AVATARS.map(a => a.id), ['lola','mika','dev','ren','ava'])
+  assert.deepEqual(AVATARS.map(a => a.id), ['lola','mika','ava','dev','grace'])
+  assert.equal(getAvatar('mika')!.interactionConstraints.activationMode, 'touch')
+  assert.equal(getAvatar('ava')!.interactionConstraints.activationMode, 'keyboard')
+  assert.equal(getAvatar('ava')!.interactionConstraints.modelReceivesScreenshot, false)
+  assert.equal(getAvatar('grace')!.interactionConstraints.neverAcceptOptionalCookies, true)
   for (const a of AVATARS) { assert.ok(a.persona.length > 100); assert.ok(a.browser.viewport.width > 0); assert.ok(a.tagline && a.whatChanges) }
 })
 test('spec-pinned mechanics', () => {
   assert.equal(getAvatar('lola')!.giveUpAfter, 4); assert.equal(getAvatar('dev')!.giveUpAfter, 3)
-  for (const id of ['mika','ren','ava']) assert.equal(getAvatar(id)!.giveUpAfter, 5)
+  for (const id of ['mika','ava','grace']) assert.equal(getAvatar(id)!.giveUpAfter, 5)
   assert.equal(getAvatar('lola')!.browser.zoom, 2); assert.equal(getAvatar('lola')!.browser.reducedMotion, true)
   assert.equal(getAvatar('mika')!.browser.device, 'iPhone 15'); assert.equal(getAvatar('mika')!.browser.touch, true)
-  assert.equal(getAvatar('ren')!.browser.keyboardOnly, true); assert.equal(getAvatar('ava')!.browser.noScreenshot, true)
+  assert.equal(getAvatar('ava')!.browser.keyboardOnly, true); assert.equal(getAvatar('ava')!.browser.noScreenshot, true)
   assert.deepEqual(getAvatar('dev')!.judgments, [])
   assert.deepEqual(SHARED_JUDGMENTS.map(j => j.name), ['content_clear']); assert.equal(SHARED_JUDGMENTS[0].severity, 'minor')
-  assert.deepEqual(getAvatar('ren')!.judgments.map(j => j.name), ['focus_visible'])
+  assert.deepEqual(getAvatar('ava')!.judgments, [])
+  assert.deepEqual(getAvatar('grace')!.judgments.map(j => j.name), ['consent_choice_clear'])
   assert.deepEqual(getAvatar('lola')!.judgments.map(j => j.name), ['readable'])
   assert.deepEqual(getAvatar('mika')!.judgments.map(j => j.name), ['target_too_small'])
 })
@@ -140,9 +156,9 @@ Run: `cd server && npm install && npm test` → FAIL, cannot find `../src/avatar
 
 | avatar | name | type | instructions | frictionWhen | severity | description |
 |---|---|---|---|---|---|---|
-| lola | `readable` | score, levels unreadable / hard / fine | "At 200% enlargement, is the content needed for the next action readable and unclipped in this screenshot?" | `v < 1` | major | "Content needed for the task is hard to read or clipped at 200% enlargement" |
+| lola | `readable` | score, levels clear / strained / unreadable | "At 200% enlargement, is the content needed for the next action readable and unclipped in this screenshot?" | unreadable only | major | "Content needed for the task is hard to read or clipped at 200% enlargement" |
 | mika | `target_too_small` | predicate | "Is the control most relevant to the goal small or crowded enough that a thumb tap would likely miss?" | `v >= 0.7` | minor | "Small or crowded tap target" |
-| ren | `focus_visible` | predicate | "Is the currently focused element clearly visibly indicated in this screenshot?" | `v <= 0.3` | major | "Focused element is not visibly indicated" |
+| grace | `consent_choice_clear` | predicate | "Are the site's privacy and consent choices clearly worded, with an understandable way to reject optional collection? Cite exact copy or behavior." | `v <= 0.3` | minor | "Privacy or consent choice is unclear" |
 | dev, ava | none | | | | | |
 | all (`SHARED_JUDGMENTS`) | `content_clear` | predicate | "Would this user understand what this page is telling them in relation to the goal, for example what each plan includes and costs?" | `v <= 0.3` | minor | "Content unclear for this user" |
 
@@ -160,16 +176,18 @@ git commit -m "feat(server): scaffold package, contract types and five avatars"
 ### Task 2: Candidate actions from the aria snapshot
 
 **Files:**
+- Create: `server/src/action-tools.ts` (reviewed action policy registry)
 - Create: `server/src/candidates.ts`
 - Test: `server/test/candidates.test.ts`
 
 **Interfaces:**
 - Consumes: `Avatar`, `Candidate` from Task 1.
 - Produces:
+  - `export const ACTION_TOOL_POLICIES: Record<Action['kind'], { modes:Candidate['mode'][]; risks:Candidate['risk'][] }>` — reviewed source of action modes and allowed risk classes. `click` supports pointer/touch; `press` keyboard; `scroll` viewport; `done`/`give_up` control. Candidate risk is determined from the live control and must be permitted by this policy.
   - `export type Node = { role:string; name:string; index:number }`
   - `export function parseSnapshot(yaml:string): Node[]` — interactive nodes in document order; `index` = 0-based occurrence of the same role+name pair.
   - `export function refFor(n:Node): string` → `` `${role}|${name}|${index}` ``.
-  - `export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[]` — ≤ 40. Element actions only for **named** nodes (`click_<i>`, description `click <role> "<name>"`; Mika's description says `tap`). Always ends with `scroll_down`, `scroll_up`, `press_escape`, `done`, `give_up`. Ren: `press_tab`, `press_shift_tab`, `press_enter`, `press_space`, `press_arrowdown`, `press_arrowup`, `press_escape`, `done`, `give_up` and nothing else. Trimming drops element actions from the end. `ponytail:` document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions.
+  - `export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[]` — ≤ 40. It is the only source of model-selectable actions: materialize actions from the backend-owned registry, then filter by `avatar.interactionConstraints`. Element actions only for **named** eligible nodes (`click_<i>`, description `click <role> "<name>"`; Mika's description says `tap`); exclude submit, destructive, purchase, and other consequential controls. Every candidate carries its registry-derived mode and risk. Standard profiles also get `scroll_down`, `scroll_up`, `press_escape`, `done`, `give_up`. Ava gets `press_tab`, `press_shift_tab`, `press_enter`, `press_space`, all four arrow keys, `press_escape`, `done`, `give_up` and nothing else; no pointer or coordinate targets. For Grace, omit any candidate that accepts all optional cookies when a safe reject/necessary-only choice is available. Trimming drops element actions from the end. `ponytail:` document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions.
   - `export function unnamedControls(snapshot:string): number` — count of interactive nodes with empty name (Ava's evidence).
 
 Interactive roles: `link button textbox searchbox combobox checkbox radio menuitem tab switch option`. Grammar: `- role "name"`, `- role "name" [attrs]`, `- role "name":`, `- role:`/`- role`, nested indentation, `- /url:` lines ignored.
@@ -206,9 +224,14 @@ test('buildCandidates: named clicks only, control actions last, cap 40, Mika tap
   const big = Array.from({length: 80}, (_, i) => `- link "L${i}"`).join('\n')
   assert.equal(buildCandidates(big, getAvatar('dev')!).length, 40)
 })
-test('Ren gets the permitted key presses only', () => {
-  const c = buildCandidates(snap, getAvatar('ren')!)
-  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_escape','done','give_up'])
+test('Ava gets the permitted key presses only', () => {
+  const c = buildCandidates(snap, getAvatar('ava')!)
+  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_arrowleft','press_arrowright','press_escape','done','give_up'])
+})
+test('Grace prefers a safe cookie decline when one is offered', () => {
+  const c = buildCandidates('- button "Accept all cookies"\n- button "Reject optional cookies"', getAvatar('grace')!)
+  assert.ok(!c.some(x => /accept all cookies/i.test(x.description)))
+  assert.ok(c.some(x => /reject optional cookies/i.test(x.description)))
 })
 test('unnamedControls counts empty names', () => { assert.equal(unnamedControls(snap), 1) })
 ```
@@ -239,7 +262,7 @@ export async function decide(input:StepInput, fetchImpl?:typeof fetch): Promise<
 export async function summarize(prompt:string, schema:object, fetchImpl?:typeof fetch): Promise<unknown>   // Responses API json_schema structured output; returns parsed JSON
 ```
 
-Request: `input` = one `user` message, `content` = `[{type:'input_text', text}, {type:'input_image', image_url:'data:image/png;base64,…'}]`, image omitted when `screenshotB64` is undefined. Text = base rules + `avatar.persona` + `Goal: …` + last 6 history lines + title/url + snapshot (≤ 6000 chars) + `pageText` (≤ 4000, Ava) + `Focused: …` (Ren). Questions: `next_action` (choice over candidates), `goal_reached` (predicate, instructions exactly: "Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing."), then each `SHARED_JUDGMENTS` entry, then each `avatar.judgments` entry. Base rules exactly: "You are simulating one specific web user attempting a goal. Choose the single next action that this user, with their limits and habits, would most plausibly take. Choose done only if the goal is already achieved on this page. Choose give_up only if this user would leave."
+Request: `input` = one `user` message, `content` = `[{type:'input_text', text}, {type:'input_image', image_url:'data:image/png;base64,…'}]`, image omitted when `screenshotB64` is undefined. Text = base rules + `avatar.persona` + `Goal: …` + last 6 history lines + title/url + snapshot (≤ 6000 chars) + `pageText` (≤ 4000, Ava and Grace when applicable) + `Focused: …` (Ava). Questions: `next_action` (choice over candidates), `goal_reached` (predicate, instructions exactly: "Does this page show concrete evidence that the goal is already complete? For a pricing goal that means actual plan prices or explicit pricing information on screen, not a link or a URL that mentions pricing."), then each `SHARED_JUDGMENTS` entry, then each `avatar.judgments` entry. Base rules exactly: "You are simulating one specific web user attempting a goal. Choose the single next action that this user, with their limits and habits, would most plausibly take. Choose done only if the goal is already achieved on this page. Choose give_up only if this user would leave."
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -251,13 +274,17 @@ import { getAvatar } from '../src/avatars.ts'
 import { buildCandidates } from '../src/candidates.ts'
 const base = (id:string) => ({ avatar:getAvatar(id)!, goal:'Find the pricing', url:'https://x.test', title:'X', snapshot:'- link "Pricing"', history:[], candidates:buildCandidates('- link "Pricing"', getAvatar(id)!) })
 test('request carries next_action, goal_reached and avatar judgments; Ava never gets an image', () => {
-  const r:any = buildDecisionRequest({ ...base('ren'), screenshotB64:'AAA=', focused:'link|Pricing|0' })
+  const r:any = buildDecisionRequest({ ...base('ava'), screenshotB64:'AAA=', focused:'link|Pricing|0' })
   assert.equal(r.model, 'gpt-6-luna')
-  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','content_clear','focus_visible'])
-  assert.ok(r.input[0].content.some((c:any) => c.type === 'input_image'))
+  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','content_clear'])
+  assert.ok(!r.input[0].content.some((c:any) => c.type === 'input_image'))
   const a:any = buildDecisionRequest({ ...base('ava'), screenshotB64:'AAA=', pageText:'Plans from $9' })
   assert.ok(!a.input[0].content.some((c:any) => c.type === 'input_image'))
   assert.match(a.input[0].content[0].text, /Plans from \$9/)
+  const d:any = buildDecisionRequest({ ...base('dev'), screenshotB64:'AAA=' })
+  assert.ok(d.input[0].content.some((c:any) => c.type === 'input_image'))
+  const g:any = buildDecisionRequest({ ...base('grace'), screenshotB64:'AAA=' })
+  assert.ok(g.questions.some((q:any) => q.name === 'consent_choice_clear'))
 })
 test('decide maps answers, keeps probabilities, retries on 429 then throws', async () => {
   let calls = 0
@@ -298,10 +325,10 @@ export async function captureState(page:Page, avatar:Avatar, screenshotPath:stri
 export function currentPage(context:BrowserContext): Page                              // newest open page
 ```
 
-`openAvatarPage`: `devices[device]` spread into `newContext` when set, `viewport`, `hasTouch: touch`, `reducedMotion:'reduce'` when set; when `zoom`, `addInitScript` that sets `document.documentElement.style.zoom = String(zoom)` on `DOMContentLoaded` (content reflows; this is the simulation of the enlargement setting). `page.on('dialog', d => { interruptions.push('dialog: ' + d.message()); d.dismiss() })`, `context.on('page', …)` for popups, `page.on('download', d => d.cancel())`. `goto(url, { waitUntil:'domcontentloaded', timeout:30000 })`; the caller handles errors. `captureState`: `snapshot = await page.locator('body').ariaSnapshot()`; `pageText` = body `innerText` first 4000 chars when `noScreenshot`; `focused` = `role|name` of `document.activeElement` when `keyboardOnly`.
+`openAvatarPage`: `devices[device]` spread into `newContext` when set, `viewport`, `hasTouch: touch`, `reducedMotion:'reduce'` when set; when `zoom`, `addInitScript` that sets `document.documentElement.style.zoom = String(zoom)` on `DOMContentLoaded` (content reflows; this is the simulation of the enlargement setting). `page.on('dialog', d => { interruptions.push('dialog: ' + d.message()); d.dismiss() })`, `context.on('page', …)` for popups, `page.on('download', d => d.cancel())`. `goto(url, { waitUntil:'domcontentloaded', timeout:30000 })`; the caller handles errors. `captureState`: `snapshot = await page.locator('body').ariaSnapshot()`; `pageText` = body `innerText` first 4000 chars for Ava and Grace; screenshot input omitted for Ava; `focused` = `role|name` of `document.activeElement` when `keyboardOnly`.
 
 - [ ] **Step 1: Implement `server/src/browser.ts`.** No unit test (browser-bound).
-- [ ] **Step 2: Write `server/scripts/smoke-browser.ts`**: open `https://example.com` as all five, save `server/runs/smoke/<id>.png`, print snapshot length and, for Ava, `pageText` length.
+- [ ] **Step 2: Write `server/scripts/smoke-browser.ts`**: open `https://example.com` as all five, save `server/runs/smoke/<id>.png`, print snapshot length and page-text length for Ava and Grace.
 - [ ] **Step 3: Run it**: `cd server && node scripts/smoke-browser.ts`. Expected: five PNGs; Lola's visibly enlarged and reflowed, Mika's phone-shaped. If the user asks to see them, copy into one flat folder on `~/Desktop` and open it.
 - [ ] **Step 4: Commit** — `feat(server): per-avatar browser contexts and state capture`
 
@@ -314,17 +341,17 @@ export function currentPage(context:BrowserContext): Page                       
 - Test: `server/test/executor.test.ts`
 
 **Interfaces:**
-- Consumes: `Action`, `Avatar`, `Box` from Task 1.
+- Consumes: `Action`, `Avatar`, `Box`, `Candidate` from Task 1.
 - Produces:
 
 ```ts
 export type ExecResult = { ok:boolean; box?:Box; element?:string; reason?:string }
 export function resolveLocator(page:Page, ref:string): Locator      // role|name|index → getByRole(role,{name,exact:true}).nth(index)
 export function labelFor(action:Action, avatar:Avatar): string      // pure: 'Opening "Pricing"' | 'Tapping "Pricing"' (touch) | 'Scrolling down' | 'Pressing Tab' | 'Done' | 'Giving up'
-export async function applyAction(page:Page, action:Action, avatar:Avatar): Promise<ExecResult>
+export async function applyAction(page:Page, candidate:Candidate, avatar:Avatar, allowedCandidates:Candidate[]): Promise<ExecResult>
 ```
 
-`applyAction`: resolve, `boundingBox()` → `box`, `element = ref`; `tap()` when `avatar.browser.touch` else `click()`; scroll `mouse.wheel(0, ±600)`; `keyboard.press(key)`; then `waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})`. Any Playwright error → `{ ok:false, reason: err.message }`.
+`applyAction`: first confirm `candidate` exactly matches an entry in `allowedCandidates` and its registry mode is permitted for the avatar; recheck the live target is eligible, not a submit/consequential control, and does not violate profile constraints (including Grace's cookie preference). Then use `candidate.action`: resolve, `boundingBox()` → `box`, `element = ref`; `tap()` when `avatar.browser.touch` else `click()`; scroll `mouse.wheel(0, ±600)`; `keyboard.press(key)`; then `waitForLoadState('networkidle', { timeout: 10000 }).catch(() => {})`. Any rejected action or Playwright error → `{ ok:false, reason: err.message }`; rejection is an executor error, never site friction.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -335,7 +362,7 @@ import { labelFor } from '../src/executor.ts'; import { getAvatar } from '../src
 test('labels are templated per action and avatar', () => {
   assert.equal(labelFor({kind:'click',ref:'link|Pricing|0',label:'Pricing'}, getAvatar('dev')!), 'Opening "Pricing"')
   assert.equal(labelFor({kind:'click',ref:'link|Pricing|0',label:'Pricing'}, getAvatar('mika')!), 'Tapping "Pricing"')
-  assert.equal(labelFor({kind:'press',key:'Shift+Tab'}, getAvatar('ren')!), 'Pressing Shift+Tab')
+  assert.equal(labelFor({kind:'press',key:'Shift+Tab'}, getAvatar('ava')!), 'Pressing Shift+Tab')
   assert.equal(labelFor({kind:'scroll',direction:'down'}, getAvatar('lola')!), 'Scrolling down')
 })
 ```
@@ -365,7 +392,7 @@ export function consecutiveTaskFriction(steps:Step[]): number        // trailing
 export function finalStatus(goalReached:number, end:'done'|'gave_up'|'cap'|'stopped'): AvatarStatus
 ```
 
-Loop (n from 1): `isStopping()` → end `stopped`; n > 25 or elapsed > 240 s → `cap`; `captureState` to `${runDir}/${avatar.id}-${n}.png` (stored on the step as `/screenshots/<runId>/<file>`); Ava also stores `treeExcerpt` = first 1500 chars of snapshot; `buildCandidates`; `decide` (throw → status `failed`, reason message, end); `done` → end `done`; `give_up` → end `gave_up` (reason `model`); else `applyAction`; on `{ok:false}` set `step.executorError = reason` and continue; collect `interruptions` into `step.interruption`; `friction = frictionFromStep`; emit step; `consecutiveTaskFriction(steps) >= avatar.giveUpAfter` → end `gave_up` (reason `friction floor`). Navigation error → `failed`, reason `navigation: ` + message. Close context in `finally`; emit `avatar_status` at the end.
+Loop (n from 1): `isStopping()` → end `stopped`; n > 25 or elapsed > 240 s → `cap`; `captureState` to `${runDir}/${avatar.id}-${n}.png` (stored on the step as `/screenshots/<runId>/<file>`); Ava also stores `treeExcerpt` = first 1500 chars of snapshot and `focused` = current keyboard focus reference; `candidates = buildCandidates`; `decide` (throw → status `failed`, reason message, end); `done` → end `done`; `give_up` → end `gave_up` (reason `model`); else `applyAction(page, decision.candidate, avatar, candidates)`; on `{ok:false}` set `step.executorError = reason` and continue; collect `interruptions` into `step.interruption`; `friction = frictionFromStep`; emit step; `consecutiveTaskFriction(steps) >= avatar.giveUpAfter` → end `gave_up` (reason `friction floor`). Navigation error → `failed`, reason `navigation: ` + message. Close context in `finally`; emit `avatar_status` at the end.
 
 `frictionFromStep`: executor errors and interruptions produce **no** friction. Each judgment in `SHARED_JUDGMENTS` and `avatar.judgments` with `frictionWhen(value)` true → `{severity, description}` (`content_clear` is always minor, so it never reaches the give-up floor); Mika's `target_too_small` additionally requires or reports `exec.box`: when box has width or height < 44, `measured = "${w}×${h}px"` and the friction is emitted even if the predicate is low. Ava: `unnamedControls(snapshot) > 0` → minor `"${n} unnamed controls in the accessibility tree"`.
 
@@ -381,8 +408,7 @@ import { getAvatar } from '../src/avatars.ts'
 const dec = (j:Record<string,number> = {}) => ({ candidate:{value:'click_0',description:'click link "x"',action:{kind:'click',ref:'link|x|0',label:'x'}}, confidence:0.9, probabilities:[], goalReached:0, judgments:j }) as any
 test('executor errors are not friction; judgments and measurements are', () => {
   assert.deepEqual(frictionFromStep(dec(), { ok:false, reason:'detached' }, getAvatar('dev')!, ''), [])
-  assert.equal(frictionFromStep(dec({ focus_visible:0.1 }), { ok:true }, getAvatar('ren')!, '')[0].severity, 'major')
-  assert.deepEqual(frictionFromStep(dec({ focus_visible:0.9 }), { ok:true }, getAvatar('ren')!, ''), [])
+  assert.equal(frictionFromStep(dec({ consent_choice_clear:0.1 }), { ok:true }, getAvatar('grace')!, '')[0].severity, 'minor')
   assert.equal(frictionFromStep(dec({ content_clear:0.2 }), { ok:true }, getAvatar('dev')!, '')[0].description, 'Content unclear for this user')
   const small = frictionFromStep(dec({ target_too_small:0.2 }), { ok:true, box:{x:0,y:0,width:30,height:30} }, getAvatar('mika')!, '')
   assert.equal(small[0].measured, '30×30px'); assert.equal(small[0].severity, 'minor')
@@ -505,17 +531,17 @@ import { loadPrinciples } from '../src/principles.ts'
 import { writeFileSync, mkdtempSync } from 'node:fs'; import { join } from 'node:path'; import { tmpdir } from 'node:os'
 const step = (avatarId:any, n:number, url:string, friction:any[]) => ({ avatarId, n, url, title:'t', action:{kind:'scroll',direction:'down'}, label:'Scrolling down', screenshot:`/screenshots/r/${avatarId}-${n}.png`, friction, confidence:1, judgments:{}, goalReached:0, at:'' })
 const run:any = { id:'r', url:'https://a.com', goal:'Find the pricing', status:'finished', startedAt:'2026-10-25T00:00:00Z', avatars:{
-  lola:{ avatarId:'lola', status:'gave_up', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:01:00Z', steps:[ step('lola',1,'https://a.com/pricing',[{severity:'major',description:'Content needed for the task is hard to read or clipped at 200% enlargement',element:'link|Pricing|0'}]) ] },
-  ren:{ avatarId:'ren', status:'done', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:00:30Z', steps:[ step('ren',1,'https://a.com/pricing?x=1',[{severity:'blocker',description:'Content needed for the task is hard to read or clipped at 200% enlargement',element:'link|Pricing|0'}]), step('ren',2,'https://a.com/',[]) ] } } }
+  lola:{ avatarId:'lola', status:'gave_up', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:01:00Z', steps:[ step('lola',1,'https://a.com/pricing',[{severity:'major',description:'Pricing details are blocked by a sign-up request before any product or pricing information is shown',element:'link|Pricing|0'}]) ] },
+  ava:{ avatarId:'ava', status:'done', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:00:30Z', steps:[ step('ava',1,'https://a.com/pricing?x=1',[{severity:'blocker',description:'Pricing details are blocked by a sign-up request before any product or pricing information is shown',element:'link|Pricing|0'}]), step('ava',2,'https://a.com/',[]) ] } } }
 test('clusterFriction merges same path, element and problem; max severity; blockers first', () => {
-  const c = clusterFriction(run); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker'); assert.deepEqual(c[0].avatarIds.sort(), ['lola','ren']); assert.equal(c[0].stepRefs.length, 2)
+  const c = clusterFriction(run); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker'); assert.deepEqual(c[0].avatarIds.sort(), ['ava','lola']); assert.equal(c[0].stepRefs.length, 2)
 })
 test('validateReport enforces range, references, blocker cap and pending principles', () => {
   const clusters = clusterFriction(run); const key = clusters[0].key
   const good = { overallScore: 8, assessment:'ok', avatarNotes:[{ avatarId:'lola', note:'Reached Pricing but the plan names did not say what she would get' }], recommendations:[{ title:'t', why:'w', avatarIds:['lola'], issueIds:[key], principle:'Nielsen 1' }], issues:[{ clusterKey:key, description:'d', severity:'blocker', principle:'Nielsen 1', fixPrompt:'f' }] }
-  const v = validateReport(good, clusters, 'pending', ['lola','ren']); assert.ok(v.ok)
+  const v = validateReport(good, clusters, 'pending', ['lola','ava']); assert.ok(v.ok)
   if (v.ok) { assert.equal(v.value.avatarNotes.length, 2); assert.match(v.value.avatarNotes[1].note, /done/i); assert.equal(v.value.overallScore, 6); assert.equal(v.value.issues[0].principle, undefined); assert.match(v.value.assessment, /principles source pending/) }
-  const ids:any = ['lola','ren']
+  const ids:any = ['lola','ava']
   assert.equal(validateReport({ ...good, overallScore: 11 }, clusters, 'loaded', ids).ok, false)
   assert.equal(validateReport({ ...good, overallScore: '7' }, clusters, 'loaded', ids).ok, false)
   assert.equal(validateReport({ ...good, issues:[{ ...good.issues[0], clusterKey:'nope' }] }, clusters, 'loaded', ids).ok, false)
@@ -562,5 +588,5 @@ Per the spec, the demo is rehearsed on a site the team controls. The script take
 ## Self-review notes
 
 - Spec coverage: five avatars with their mechanics (Task 1, 4, 5), candidate restrictions (Task 2), Decisions loop with evidence-based `goal_reached` and retained judgments (Task 3, 6), templated labels (Task 5), executor errors kept out of usability findings (Task 6), SSE contract and partial results (Task 7), single score with anchors, blocker cap, validation, fallback, pending-principles behavior (Task 8), fix-prompt template with the Principle line (Task 8), rehearsal on a controlled site (Task 9). Screens are the teammate's. The skill file is never created by the server.
-- Removed from the previous plan on the spec's instruction: five avatars, typing and form data, narration calls, hesitation friction, seeded tap misses, throttling, cookie policy, color filter, markdown export, `/report.md` route.
+- Removed from the previous plan on the spec's instruction: broad form filling, narration calls, hesitation friction, seeded tap misses, throttling, browser-level cookie blocking, color filter, markdown export, `/report.md` route. Grace's constrained cookie-choice preference remains; no personal data is entered.
 - Not unit-tested: browser-bound code (Task 4, `applyAction`) and live model calls; both have manual scripts with stated expected outputs.

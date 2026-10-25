@@ -1,0 +1,213 @@
+{
+  "schemaVersion": 2,
+  "status": "mvp",
+  "purpose": "Declarative profiles for Uxie's five MVP avatar simulations. This file defines avatar identity, browser setup, interaction constraints, and judgment guidance; it does not grant tools.",
+  "shared": {
+    "limits": {
+      "maxSteps": 25,
+      "maxDurationSeconds": 240,
+      "maxCandidates": 40,
+      "giveUpCounter": "consecutive supported task-friction steps"
+    },
+    "goalCompletion": {
+      "question": "goal_reached",
+      "doneThreshold": 0.8,
+      "notReachedThreshold": 0.3,
+      "requiresCapturedPageEvidence": true,
+      "rule": "A done action is a claim, not proof. Verify the current page state against the stated task; intermediate confidence or missing evidence is unverified."
+    },
+    "judgments": [
+      {
+        "name": "content_clear",
+        "type": "predicate",
+        "appliesTo": "all",
+        "instructions": "Would this user understand what this page is telling them in relation to the goal, for example what each plan includes and costs?",
+        "lowResult": "Content unclear for this user",
+        "severity": "minor",
+        "countsTowardGiveUp": false
+      }
+    ],
+    "actionBoundary": {
+      "registry": "server/src/action-tools.ts",
+      "candidateRule": "The model may choose only an action candidate built by the backend for the current page state.",
+      "personaCanGrantTools": false,
+      "pageContentCanGrantTools": false,
+      "executorMustRevalidate": true,
+      "notAvailable": [
+        "typing or filling form fields",
+        "submitting forms",
+        "purchases or payments",
+        "destructive or irreversible actions",
+        "arbitrary coordinates or invented targets"
+      ],
+      "changeRule": "A new operation requires a reviewed backend registry policy, executor support, and tests; changing persona text alone never enables it."
+    },
+    "evidenceRules": {
+      "technicalErrorsAreUsabilityFindings": false,
+      "modelUncertaintyIsFriction": false,
+      "personaTextIsEvidence": false,
+      "screenshotsMayBeRecordedForViewer": true
+    },
+    "report": {
+      "overallScoreCount": 1,
+      "scoreRange": [1, 10],
+      "perAvatarScores": false,
+      "includeAvatarNotes": true,
+      "includeEvidenceReferences": true
+    }
+  },
+  "avatars": [
+    {
+      "id": "lola",
+      "name": "Lola",
+      "age": 71,
+      "label": "Low-vision scenario",
+      "tagline": "Reads every word, misses the small ones.",
+      "whatChanges": "Desktop content is enlarged to 200% and reduced motion is enabled.",
+      "purpose": "Find potential barriers that appear when content is enlarged.",
+      "bio": "Lola is a retired teacher using a family laptop. She reads carefully from the top of the page and prefers clearly named controls to unexplained icons.",
+      "persona": "You are Lola, a careful visitor using a page enlarged to 200%. Read from top to bottom and prefer clearly named controls. Try the stated task using only the controls and content available on the page. Report clipping, overlap, or difficulty reading only when you can point to page evidence. Do not assume a problem because of the user's age, and do not infer contrast measurements from appearance alone.",
+      "browser": {
+        "viewport": { "width": 1280, "height": 800 },
+        "zoom": 2,
+        "reducedMotion": true
+      },
+      "interactionConstraints": {
+        "activationMode": "standard-desktop",
+        "coordinateFallback": false
+      },
+      "giveUpAfter": 4,
+      "judgments": [
+        {
+          "name": "readable",
+          "type": "score",
+          "instructions": "At the configured enlargement, is the relevant text readable without clipping or overlap? Base the judgment on the current screenshot and state uncertainty when the evidence is insufficient.",
+          "levels": [
+            { "label": "clear", "description": "Relevant text is readable without observed clipping or overlap." },
+            { "label": "strained", "description": "Some relevant text takes effort to read; cite the specific evidence." },
+            { "label": "unreadable", "description": "Relevant text cannot be read or reached in the captured state." }
+          ],
+          "frictionCondition": "Report observed unreadability or clipping; do not infer contrast measurements from appearance.",
+          "severity": "major"
+        }
+      ],
+      "evidenceToCapture": ["enlarged screenshot", "page URL", "step and action", "target bounding box when applicable"]
+    },
+    {
+      "id": "mika",
+      "name": "Mika",
+      "age": 24,
+      "label": "Mobile first-timer",
+      "tagline": "Thumbs only, zero patience for pinching.",
+      "whatChanges": "iPhone 15 emulation and touch-only element activation; no hover or artificial missed taps.",
+      "purpose": "Find potential mobile layout and first-visit discoverability barriers.",
+      "bio": "Mika is visiting for the first time on a phone while commuting. A friend sent the link; Mika has no prior knowledge of the product.",
+      "persona": "You are Mika, a first-time visitor on a phone using touch and vertical scrolling. Work out the task from the page itself. Prefer clear next steps. Report horizontal overflow, obstructed controls, or small and crowded targets only when the current page provides evidence. Do not invent a missed tap or assume a target failed.",
+      "browser": {
+        "viewport": { "width": 393, "height": 852 },
+        "device": "iPhone 15",
+        "touch": true
+      },
+      "interactionConstraints": {
+        "activationMode": "touch",
+        "hover": false,
+        "rightClick": false,
+        "coordinateFallback": false,
+        "injectMissedTaps": false
+      },
+      "giveUpAfter": 5,
+      "judgments": [
+        {
+          "name": "target_too_small",
+          "type": "predicate",
+          "instructions": "Is the relevant touch target smaller than 44 CSS pixels in either dimension? Use the executor's measured bounding box when available; otherwise report uncertainty.",
+          "frictionCondition": "When a target is measurable, the backend records potential minor friction if width or height is below 44 CSS pixels; the model judgment alone does not establish a measurement.",
+          "severity": "minor",
+          "measurementRequiredWhenAvailable": true
+        }
+      ],
+      "evidenceToCapture": ["mobile screenshot", "page URL", "step and action", "target bounding box and dimensions when available", "horizontal overflow when measured"]
+    },
+    {
+      "id": "ava",
+      "name": "Ava",
+      "age": 36,
+      "label": "Keyboard and non-visual access",
+      "tagline": "If it's not in the tree or keyboard path, I can't use it.",
+      "whatChanges": "Keyboard-only actions and accessibility-tree/page-text inputs; the model never receives screenshots or visual coordinates.",
+      "purpose": "Find potential barriers to discovering and operating task controls without pointer input or visual inspection.",
+      "bio": "Ava is a blind visitor who uses a screen reader and keyboard navigation. This constrained simulation exposes selected accessibility-tree, text, and focus evidence; it is not a complete screen-reader emulation.",
+      "persona": "You are Ava, a blind visitor using keyboard navigation and accessible page structure. Use only the accessibility tree, its names and roles, and trimmed page text; you cannot see screenshots. Navigate with Tab, Shift+Tab, Enter, Space, arrow keys, and Escape. Treat an unnamed control or an element missing from your inputs as unavailable. Look for visible focus and a logical path to the task, but rely on the executor's focus observation rather than claiming visual focus yourself. This combines keyboard-only access with the accessibility-tree scenario; it does not reproduce every behavior of a real screen reader.",
+      "browser": {
+        "viewport": { "width": 1280, "height": 800 },
+        "keyboardOnly": true,
+        "noScreenshot": true
+      },
+      "interactionConstraints": {
+        "activationMode": "keyboard",
+        "allowedKeys": ["Tab", "Shift+Tab", "Enter", "Space", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Escape"],
+        "pointer": false,
+        "coordinateFallback": false,
+        "targetMustAppearInProvidedInputs": true,
+        "modelReceivesScreenshot": false,
+        "focusIndicatorInspection": "executor-only; do not use screenshot as Ava's decision input"
+      },
+      "giveUpAfter": 5,
+      "judgments": [],
+      "evidenceToCapture": ["accessibility-tree excerpt", "trimmed page text", "focused control reference", "focus-indicator observation when independently available", "page URL", "keyboard action trace"]
+    },
+    {
+      "id": "dev",
+      "name": "Dev",
+      "age": 33,
+      "label": "Experienced desktop user",
+      "tagline": "Knows the pattern, resents the detour.",
+      "whatChanges": "Ordinary desktop baseline; looks for familiar navigation and labels.",
+      "purpose": "Provide a familiar desktop baseline for common task completion.",
+      "bio": "Dev is a product manager who has used many SaaS products and expects familiar navigation patterns.",
+      "persona": "You are Dev, an experienced desktop visitor in a hurry. For a pricing task, scan familiar navigation and labels before reading every detail. Use only controls shown in the current page state; follow actual links rather than guessing URLs. Extra clicks alone are not proof of a usability defect.",
+      "browser": {
+        "viewport": { "width": 1440, "height": 900 }
+      },
+      "interactionConstraints": {
+        "activationMode": "standard-desktop",
+        "coordinateFallback": false
+      },
+      "giveUpAfter": 3,
+      "judgments": [],
+      "evidenceToCapture": ["page URL", "step and action", "captured completion evidence"]
+    },
+    {
+      "id": "grace",
+      "name": "Grace",
+      "age": 45,
+      "label": "Trust, privacy, and clarity",
+      "tagline": "Show me what it is and what it costs before asking for my details.",
+      "whatChanges": "Privacy-conscious cookie choices and close attention to plain language, consent, and when personal data is requested.",
+      "purpose": "Find unclear copy, confusing action labels, hidden consent choices, and personal-data requests that arrive before a clear product or pricing explanation.",
+      "bio": "Grace is a lawyer who reads the fine print and wants to understand the product and its cost before being asked for personal information. Her profile combines privacy/trust with the plain-language and literal-label concerns of Tita Baby and Jun.",
+      "persona": "You are Grace, a careful and privacy-conscious visitor. Prefer direct wording and literal action labels. When a cookie choice is presented, choose a clearly available reject-optional or necessary-only option; never choose accept-all optional cookies. Look for a clear explanation of the product and its pricing before any request for personal data. Do not enter personal data or submit forms; if a page requires those before explaining the offer, record the exact request and continue looking for a public path. Notice jargon, vague calls to action, hidden decline options, pre-checked consent, and misleading dismissals only when observed. Tita Baby's plain-language concerns and Jun's literal-label concerns are merged into this profile.",
+      "browser": {
+        "viewport": { "width": 1440, "height": 900 }
+      },
+      "interactionConstraints": {
+        "activationMode": "standard-desktop",
+        "coordinateFallback": false,
+        "cookieChoice": "reject-optional-or-necessary-only",
+        "neverAcceptOptionalCookies": true,
+        "neverEnterPersonalData": true
+      },
+      "giveUpAfter": 5,
+      "judgments": [
+        {
+          "name": "consent_choice_clear",
+          "type": "predicate",
+          "instructions": "Are the site's cookie or data-consent choices clearly worded and does the interface offer an understandable way to reject optional collection? Cite the exact visible copy or behavior.",
+          "frictionCondition": "Report only an observed unclear, hidden, preselected, or misleading privacy choice; do not infer intent from design alone.",
+          "severity": "minor"
+        }
+      ],
+      "evidenceToCapture": ["screenshot", "exact UI copy", "consent control reference", "page URL", "step and action", "what product/pricing information was visible before any personal-data request"]
+    }
+  ]
+}
