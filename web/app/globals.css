@@ -123,7 +123,8 @@ button{font:inherit;color:inherit}
 .sub-run b{color:#1D1D1F;font-weight:600}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:18px}
-@media (max-width:420px){.grid{grid-template-columns:1fr}}
+@media (max-width:420px){.grid{grid-template-columns:minmax(0,1fr)}}
+.rcard{min-width:0}
 .rcard{text-align:left;background:#fff;border:1px solid #EDEDF0;border-radius:22px;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:12px;transition:box-shadow .35s,transform .45s cubic-bezier(.32,.72,0,1),border-color .3s}
 .rcard:hover{box-shadow:0 14px 36px rgba(0,0,0,.09);transform:translateY(-4px)}
 .rcard:active{transform:scale(.985);transition-duration:.12s}
@@ -199,8 +200,8 @@ button{font:inherit;color:inherit}
 .r-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
 .card{border:1px solid #EDEDF0;border-radius:28px;padding:24px;background:#fff}
 .ov-top{display:flex;align-items:center;gap:18px}
-.ring{position:relative;width:76px;height:76px;flex:none}
-.ring svg{display:block;transform:rotate(-90deg)}
+.score-ring{position:relative;width:76px;height:76px;flex:none}
+.score-ring svg{display:block;transform:rotate(-90deg)}
 .ring-t{position:absolute;inset:0;display:grid;place-items:center;font-size:18px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .ov-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
 .ov-sub{font-size:14px;color:#6E6E73;margin-top:3px;line-height:1.5}

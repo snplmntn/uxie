@@ -186,7 +186,7 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
 
       <motion.section className="card" aria-label="Overview" {...enter(1)}>
         <div className="ov-top">
-          <div className="ring" role="img" aria-label={score === null ? 'Unable to rate' : `Usability score ${score} out of 10`}>
+          <div className="score-ring" role="img" aria-label={score === null ? 'Unable to rate' : `Usability score ${score} out of 10`}>
             <svg viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
               <circle cx="38" cy="38" r="31" fill="none" stroke="#F0F0F2" strokeWidth="8" />
               <motion.circle cx="38" cy="38" r="31" fill="none" stroke="#1D1D1F" strokeWidth="8" strokeLinecap="round" strokeDasharray={RING}
