@@ -6,10 +6,12 @@ import { parseSnapshot } from './candidates.ts'
 export type PageState = { url:string; title:string; snapshot:string; pageText?:string; screenshotB64?:string; focused?:string; scrollY:number }
 
 let browserPromise: Promise<Browser> | undefined
+// UXIE_LITE=1 for 512 MB hosts: the lighter headless shell (page videos stay black) and no session recording.
+const LITE = process.env.UXIE_LITE === '1'
 
 export async function getBrowser(): Promise<Browser> {
-  // Full Chromium build: the default headless shell leaves page videos black.
-  browserPromise ??= chromium.launch({ headless: true, channel: 'chromium', args: ['--disable-dev-shm-usage'] }).then(
+  // Full Chromium build by default: the headless shell leaves page videos black.
+  browserPromise ??= chromium.launch({ headless: true, ...(LITE ? {} : { channel: 'chromium' }), args: ['--disable-dev-shm-usage'] }).then(
     b => { b.on('disconnected', () => { browserPromise = undefined }); return b },
     e => { browserPromise = undefined; throw e },
   )
@@ -46,7 +48,7 @@ export async function openAvatarPage(avatar:Avatar, url:string, videoDir?:string
     ...(b.zoom ? { deviceScaleFactor: zoom } : {}),
     hasTouch: !!b.touch,
     ...(b.reducedMotion ? { reducedMotion: 'reduce' as const } : {}),
-    ...(videoDir ? { recordVideo: { dir: videoDir, size: { width: Math.round(b.viewport.width / zoom), height: Math.round(b.viewport.height / zoom) } } } : {}),
+    ...(videoDir && !LITE ? { recordVideo: { dir: videoDir, size: { width: Math.round(b.viewport.width / zoom), height: Math.round(b.viewport.height / zoom) } } } : {}),
   })
   const token = process.env.UXIE_ALLOWLIST_TOKEN
   if (token) await context.route(u => sameSite(u.href, url), r => r.continue({ headers: { ...r.request().headers(), [ALLOW_HEADER]: token } }))
