@@ -10,6 +10,7 @@ type Body = Pick<Report,'overallScore'|'unableToRateReason'|'assessment'|'avatar
 const PENDING = 'UI/UX principles source pending'
 const RANK: Record<Severity, number> = { blocker:0, major:1, minor:2 }
 const name = (id:AvatarId) => getAvatar(id)?.name ?? id
+const join = (xs:string[]) => xs.length < 2 ? xs.join('') : `${xs.slice(0, -1).join(', ')} and ${xs.at(-1)}`
 const path = (url:string) => { try { return new URL(url).pathname } catch { return url } }
 
 export function clusterFriction(run:Run): Cluster[] {
@@ -42,9 +43,13 @@ function templatedNote(a:AvatarRun): string {
   return `${name(a.avatarId)} ${OUTCOME[a.status]} after ${n} step${n === 1 ? '' : 's'}${last ? ` on ${path(last.url)}` : ''}`
 }
 
-function issueFromCluster(c:Cluster, d:{ description:string; fixPrompt:string; principle?:string }): Issue {
+// First clause of the description, capped at 60 chars, for the card headline.
+export const shortTitle = (d:string) => { const t = d.split(/[.;:,(]|\s[-–—]\s/)[0].trim(); return t.length > 60 ? t.slice(0, 59).trimEnd() + '…' : t }
+
+function issueFromCluster(c:Cluster, d:{ title?:string; description:string; fixPrompt:string; principle?:string }): Issue {
   const { key, ...rest } = c
-  return { id:key, ...rest, description:d.description, fixPrompt:d.fixPrompt, ...(d.principle ? { principle:d.principle } : {}) }
+  const title = d.title?.trim() ? shortTitle(d.title) : shortTitle(d.description)
+  return { id:key, ...rest, title, description:d.description, fixPrompt:d.fixPrompt, ...(d.principle ? { principle:d.principle } : {}) }
 }
 
 export function fallbackReport(run:Run, clusters:Cluster[], source:Source, reason:string): Report {
@@ -80,7 +85,7 @@ export function validateReport(raw:unknown, clusters:Cluster[], source:Source, r
     const c = byKey.get(i?.clusterKey)
     if (!c) return { ok:false, reason:`unknown clusterKey: ${i?.clusterKey}` }
     if (!str(i.description) || !str(i.fixPrompt)) return { ok:false, reason:`issue ${c.key} missing description or fixPrompt` }
-    if (!issues.some(x => x.id === c.key)) issues.push(issueFromCluster(c, { description:i.description, fixPrompt:i.fixPrompt, principle:principle(i.principle) }))
+    if (!issues.some(x => x.id === c.key)) issues.push(issueFromCluster(c, { title:str(i.title) ? i.title : undefined, description:i.description, fixPrompt:i.fixPrompt, principle:principle(i.principle) }))
   }
   const recommendations: Report['recommendations'] = []
   for (const rec of r.recommendations) {
@@ -106,15 +111,20 @@ export function validateReport(raw:unknown, clusters:Cluster[], source:Source, r
 export function runStats(run:Run) {
   const avatars = Object.values(run.avatars).map(a => ({
     avatarId:a.avatarId, status:a.status, steps:a.steps.length,
-    seconds:Math.round((Date.parse(a.endedAt ?? new Date().toISOString()) - Date.parse(a.startedAt)) / 1000),
+    seconds:Math.round((Date.parse(a.endedAt ?? new Date().toISOString()) - Date.parse(a.startedAt)) / 1000), ...(a.video ? { video:a.video } : {}),
   }))
-  const counts = avatars.map(a => a.steps).sort((x, y) => x - y), mid = counts.length >> 1
+  // Technical failures never used the site, so their 0 steps would drag the median down.
+  const counts = avatars.filter(a => a.status !== 'failed').map(a => a.steps).sort((x, y) => x - y), mid = counts.length >> 1
   const medianSteps = counts.length ? (counts.length % 2 ? counts[mid] : (counts[mid - 1] + counts[mid]) / 2) : 0
   return { avatars, medianSteps, succeeded:avatars.filter(a => a.status === 'done').length, total:avatars.length }
 }
 
+const ALLOWLIST_HELP = 'If you own this site, let Uxie through: add a Cloudflare custom rule (or your firewall\'s equivalent) that skips bot checks when the x-uxie-token request header equals a secret you choose, then set UXIE_ALLOWLIST_TOKEN to that secret on the Uxie server.'
+
 function assemble(run:Run, clusters:Cluster[], source:Source, body:Body): Report {
   const stats = runStats(run)
+  const blocked = Object.values(run.avatars).filter(a => a.reason?.startsWith('blocked:')).map(a => name(a.avatarId))
+  if (blocked.length) body = { ...body, assessment: `${body.assessment} The site's bot protection stopped ${join(blocked)} before they could start. ${ALLOWLIST_HELP}` }
   const partial = run.status === 'stopping' || stats.avatars.some(a => a.status === 'stopped' || a.status === 'failed')
   const worstBlocker = clusters.find(c => c.severity === 'blocker')?.description
   return { runId:run.id, goal:run.goal, url:run.url, partial, principlesSource:source, ...body, ...stats, ...(worstBlocker ? { worstBlocker } : {}) }
@@ -149,12 +159,12 @@ function buildPrompt(run:Run, clusters:Cluster[], principles:{ source:Source; te
   const cl = clusters.map(c => `- clusterKey: ${c.key}\n  severity ${c.severity}; page ${c.pageUrl}; avatars ${c.avatarIds.join(', ')}; steps ${c.stepRefs.map(r => `${r.avatarId}#${r.n}`).join(', ')}${c.treeExcerpt ? `\n  tree: ${c.treeExcerpt.slice(0, 300)}` : ''}`)
   return [
     'You write the final usability report for a preflight run in which simulated users attempted one goal on a website. Return JSON matching the schema.',
-    principles.source === 'loaded' ? `UI/UX principles (cite a principle only when the observed evidence supports it):\n${principles.text}` : `${PENDING}. Do not cite principles or describe the assessment as book-based; set every principle to null and say "${PENDING}" in the assessment.`,
+    principles.source === 'loaded' ? `UI/UX principles (cite a principle only when the observed evidence supports it). Use them for severity, prioritization and metrics; keep measured values and established standards (e.g. a 44×44px minimum tap target) in recommendations even though the principles do not list them:\n${principles.text}` : `${PENDING}. Do not cite principles or describe the assessment as book-based; set every principle to null and say "${PENDING}" in the assessment.`,
     `Pick one integer overallScore from 1 to 10 using these anchors:\n${ANCHORS}\nAn observed blocker in a tested interaction mode rules out the 7–10 range. Every reason for lowering the score must trace to a finding. Technical failures (executorError, API or browser errors) must not lower the score. If technical failures prevent any meaningful assessment, set overallScore to null and explain in unableToRateReason; otherwise set unableToRateReason to null.`,
     'assessment: a short plain-language explanation of the score and the tested scope, including incomplete coverage.',
     'avatarNotes: one note per selected avatar saying where they got to and, if they did not finish or flagged "Content unclear for this user", what they could not find or understand.',
     'recommendations: up to three general improvements ordered by user impact; do not manufacture problems. For any unclear-content finding, include a recommendation that describes the improved step the site should offer (clearer plan names, a one-line summary under each price, a plainer button label). issueIds must be clusterKeys from the list below.',
-    `issues: one per supported cluster below, using its exact clusterKey. Skip clusters that are only technical failures or unsupported persona assumptions. Each fixPrompt must follow this template exactly:\n${FIX_TEMPLATE}`,
+    `issues: one per supported cluster below, using its exact clusterKey. title: a plain-language headline of at most 60 characters naming the problem (e.g. "Menu button too small to tap"); description: the full explanation. Skip clusters that are only technical failures or unsupported persona assumptions. Each fixPrompt must follow this template exactly:\n${FIX_TEMPLATE}`,
     `Goal: ${run.goal}\nSite: ${run.url}`,
     `# Avatar outcomes and step logs\n${logs.join('\n\n')}`,
     `# Friction clusters\n${cl.length ? cl.join('\n') : '(none observed)'}`,
@@ -170,7 +180,7 @@ function buildSchema(run:Run, clusters:Cluster[]): object {
     overallScore:{ type:['integer', 'null'] }, unableToRateReason:nstr, assessment:{ type:'string' },
     avatarNotes:{ type:'array', items:obj({ avatarId:ids, note:{ type:'string' } }) },
     recommendations:{ type:'array', items:obj({ title:{ type:'string' }, why:{ type:'string' }, avatarIds:{ type:'array', items:ids }, issueIds:{ type:'array', items:key }, principle:nstr }) },
-    issues:{ type:'array', items:obj({ clusterKey:key, description:{ type:'string' }, principle:nstr, fixPrompt:{ type:'string' } }) },
+    issues:{ type:'array', items:obj({ clusterKey:key, title:{ type:'string' }, description:{ type:'string' }, principle:nstr, fixPrompt:{ type:'string' } }) },
   })
 }
 

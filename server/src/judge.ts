@@ -80,7 +80,7 @@ export async function decide(input:StepInput, fetchImpl?:typeof fetch): Promise<
 
 export async function summarize(prompt:string, schema:object, fetchImpl?:typeof fetch): Promise<unknown> {
   const data = await post('https://api.openai.com/v1/responses', {
-    model:process.env.OPENAI_TEXT_MODEL, input:prompt,
+    model:process.env.OPENAI_TEXT_MODEL, input:prompt, reasoning:{ effort:'low' }, // ponytail: low effort cut report time ~15s→~11s with the same score and advice
     text:{ format:{ type:'json_schema', name:'report', schema, strict:true } },
   }, fetchImpl, 'responses')
   const text = data.output_text ?? data.output?.flatMap((o:any) => o.content ?? []).map((c:any) => c.text ?? '').join('')

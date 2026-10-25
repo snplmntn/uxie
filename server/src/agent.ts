@@ -67,16 +67,22 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
   const { avatar } = ctx
   const run: AvatarRun = { avatarId:avatar.id, status:'running', steps:[], startedAt:new Date().toISOString() }
   const t0 = Date.now()
-  let context: BrowserContext | undefined
+  let context: BrowserContext | undefined, first: Page | undefined
   const end = (status:AvatarStatus, reason?:string) => { run.status = status; if (reason) run.reason = reason }
   try {
     let opened
-    try { opened = await openAvatarPage(avatar, ctx.url) }
+    try { opened = await openAvatarPage(avatar, ctx.url, ctx.runDir) }
     catch (e) { end('failed', 'navigation: ' + (e as Error).message); return run }
-    context = opened.context
+    context = opened.context; first = opened.page
     context.setDefaultTimeout(5000)
     const { interruptions } = opened
     const lastG = () => run.steps.at(-1)?.goalReached ?? 0
+    // Quick look for the UI as soon as the HTML is in, then let videos and images load (capped) so the
+    // first judged screenshot is the page a person would actually see.
+    const early = `${avatar.id}-0.png`
+    if (await opened.page.screenshot({ path:`${ctx.runDir}/${early}`, timeout:5000 }).then(() => true, () => false))
+      ctx.emit({ type:'frame', avatarId:avatar.id, n:1, url:opened.page.url(), screenshot:`/screenshots/${ctx.runId}/${early}` })
+    await opened.page.waitForLoadState('load', { timeout:2500 }).catch(() => {})
     for (let n = 1; ; n++) {
       if (ctx.isStopping()) { end(finalStatus(lastG(), 'stopped')); break }
       if (n > MAX_STEPS || Date.now() - t0 > MAX_MS) { end(finalStatus(lastG(), 'cap'), 'cap'); break }
@@ -87,6 +93,8 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
       try { state = await capture(page, avatar, `${ctx.runDir}/${file}`) }
       catch (e) { end('failed', 'capture: ' + (e as Error).message); break }
       if (isBotChallenge(state)) { end('failed', `blocked: bot challenge (${state.title || state.url})`); break }
+      // Show the page right away; the step itself follows once the model has decided.
+      ctx.emit({ type:'frame', avatarId:avatar.id, n, url:state.url, screenshot:`/screenshots/${ctx.runId}/${file}` })
       let decision: Decision
       try {
         decision = await decide({ avatar, goal:ctx.goal, url:state.url, title:state.title, snapshot:state.snapshot, pageText:state.pageText,
@@ -121,7 +129,13 @@ export async function runAvatar(ctx:AgentCtx): Promise<AvatarRun> {
     return run
   } finally {
     await context?.close().catch(() => {})
+    // ponytail: replay is the first tab only; popups record their own files and are dropped. Stitch them if popups matter.
+    const video = first?.video()
+    if (video) {
+      try { await video.saveAs(`${ctx.runDir}/${avatar.id}.webm`); run.video = `/videos/${ctx.runId}/${avatar.id}.webm` } catch {}
+      await video.delete().catch(() => {})
+    }
     run.endedAt = new Date().toISOString()
-    ctx.emit({ type:'avatar_status', avatarId:avatar.id, status:run.status, ...(run.reason ? { reason:run.reason } : {}) })
+    ctx.emit({ type:'avatar_status', avatarId:avatar.id, status:run.status, ...(run.reason ? { reason:run.reason } : {}), ...(run.video ? { video:run.video } : {}) })
   }
 }

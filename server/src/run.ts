@@ -43,6 +43,7 @@ function emit(run:Run, e:RunEvent) {
     const a = run.avatars[e.avatarId]
     a.status = e.status
     if (e.reason) a.reason = e.reason
+    if (e.video) a.video = e.video
     if (e.status !== 'running') a.endedAt ??= new Date().toISOString()
   }
   for (const fn of listeners.get(run.id) ?? []) {

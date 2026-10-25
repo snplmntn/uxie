@@ -39,10 +39,10 @@ export type Step = {
   confidence:number; judgments:Record<string,number>; goalReached:number; at:string
 }
 export type AvatarStatus = 'queued'|'running'|'done'|'unverified'|'gave_up'|'failed'|'stopped'
-export type AvatarRun = { avatarId:AvatarId; status:AvatarStatus; steps:Step[]; reason?:string; startedAt:string; endedAt?:string }
+export type AvatarRun = { avatarId:AvatarId; status:AvatarStatus; steps:Step[]; reason?:string; startedAt:string; endedAt?:string; video?:string }
 export type RunStatus = 'running'|'stopping'|'finished'
 export type StepRef = { avatarId:AvatarId; n:number }
-export type Issue = { id:string; severity:Severity; avatarIds:AvatarId[]; pageUrl:string; stepRefs:StepRef[]; screenshot:string|null; treeExcerpt?:string; element?:string; box?:Box; description:string; principle?:string; fixPrompt:string }
+export type Issue = { id:string; severity:Severity; avatarIds:AvatarId[]; pageUrl:string; stepRefs:StepRef[]; screenshot:string|null; treeExcerpt?:string; element?:string; box?:Box; title:string; description:string; principle?:string; fixPrompt:string }
 export type Recommendation = { title:string; why:string; avatarIds:AvatarId[]; issueIds:string[]; principle?:string }
 export type AvatarNote = { avatarId:AvatarId; note:string }
 export type Report = {
@@ -50,11 +50,12 @@ export type Report = {
   overallScore:number|null; unableToRateReason?:string; assessment:string
   avatarNotes:AvatarNote[]; recommendations:Recommendation[]; issues:Issue[]
   succeeded:number; total:number; medianSteps:number; worstBlocker?:string
-  avatars:{ avatarId:AvatarId; status:AvatarStatus; steps:number; seconds:number }[]
+  avatars:{ avatarId:AvatarId; status:AvatarStatus; steps:number; seconds:number; video?:string }[]
 }
 export type Run = { id:string; url:string; goal:string; status:RunStatus; startedAt:string; avatars:Record<string,AvatarRun>; report?:Report }
 export type RunEvent =
   | { type:'step'; step:Step }
-  | { type:'avatar_status'; avatarId:AvatarId; status:AvatarStatus; reason?:string }
+  | { type:'avatar_status'; avatarId:AvatarId; status:AvatarStatus; reason?:string; video?:string }
+  | { type:'frame'; avatarId:AvatarId; n:number; url:string; screenshot:string }  // what the avatar sees before deciding step n; live only, not replayed
   | { type:'run_status'; status:RunStatus }
   | { type:'report'; report:Report }

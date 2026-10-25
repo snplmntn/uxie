@@ -3,8 +3,11 @@ import { Hono } from 'hono'
 import { cors } from 'hono/cors'
 import { streamSSE } from 'hono/streaming'
 import { serve } from '@hono/node-server'
+import { serveStatic } from '@hono/node-server/serve-static'
 import type { RunEvent } from './types.ts'
 import { AVATARS } from './avatars.ts'
+import { fetchIcon } from './favicon.ts'
+import { getBrowser } from './browser.ts'
 import { RUNS_DIR, createRun, getRun, parseRunRequest, stopRun, subscribe } from './run.ts'
 
 const app = new Hono()
@@ -32,7 +35,7 @@ app.get('/runs/:id/events', c => {
     const queue: RunEvent[] = []
     for (const a of Object.values(run.avatars)) {
       for (const step of a.steps) queue.push({ type:'step', step })
-      queue.push({ type:'avatar_status', avatarId:a.avatarId, status:a.status, ...(a.reason ? { reason:a.reason } : {}) })
+      queue.push({ type:'avatar_status', avatarId:a.avatarId, status:a.status, ...(a.reason ? { reason:a.reason } : {}), ...(a.video ? { video:a.video } : {}) })
     }
     if (run.report) queue.push({ type:'report', report:run.report })
     queue.push({ type:'run_status', status:run.status })
@@ -63,5 +66,19 @@ app.get('/screenshots/:runId/:file', async c => {
   catch { return c.json({ error:'not found' }, 404) }
 })
 
+// Site logo for the UI header; 404 lets the client fall back to a letter badge.
+app.get('/favicon', async c => {
+  let u: URL
+  try { u = new URL(c.req.query('url') ?? '') } catch { return c.json({ error:'bad url' }, 400) }
+  if (!/^https?:$/.test(u.protocol) || !u.hostname.includes('.')) return c.json({ error:'bad url' }, 400)
+  const icon = await fetchIcon(u)
+  return icon ? c.body(icon.body, 200, { 'content-type':icon.type, 'cache-control':'public, max-age=86400' }) : c.json({ error:'no icon' }, 404)
+})
+
+// Session replays; serveStatic answers Range requests so the player can seek.
+app.get('/videos/:runId/:file{[\\w-]+\\.webm}', serveStatic({ root: RUNS_DIR, rewriteRequestPath: p => p.replace(/^\/videos/, '') }))
+
 const port = Number(process.env.PORT) || 4000
 serve({ fetch:app.fetch, port }, () => console.log(`uxie server on http://localhost:${port}`))
+// Warm the browser so the first run does not pay its ~2 s cold launch.
+getBrowser().catch(e => console.error('browser prewarm failed', e))

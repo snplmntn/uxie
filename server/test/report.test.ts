@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict'
-import { clusterFriction, validateReport, buildReport } from '../src/report.ts'
+import { clusterFriction, validateReport, buildReport, runStats } from '../src/report.ts'
 import { loadPrinciples } from '../src/principles.ts'
 import { writeFileSync, mkdtempSync } from 'node:fs'; import { join } from 'node:path'; import { tmpdir } from 'node:os'
 const step = (avatarId:any, n:number, url:string, friction:any[]) => ({ avatarId, n, url, title:'t', action:{kind:'scroll',direction:'down'}, label:'Scrolling down', screenshot:`/screenshots/r/${avatarId}-${n}.png`, friction, confidence:1, judgments:{}, goalReached:0, at:'' })
@@ -29,10 +29,21 @@ test('loadPrinciples is pending for missing file, placeholder headings, or TBD',
   assert.equal(loadPrinciples(join(dir, 'missing.md')).source, 'pending')
   writeFileSync(p, '---\nname: ux-principles\n---\n# Heuristics\n## Visibility\n## Match\n'); assert.equal(loadPrinciples(p).source, 'pending')
   writeFileSync(p, '# Book\n' + 'Rule: say the action on the button. Example: "Start trial" beats "Go". '.repeat(6)); assert.equal(loadPrinciples(p).source, 'loaded')
+  writeFileSync(p, '---\nname: b\n---\n## How to Use\nnav\n## Core Frameworks\n' + 'Rule: severity follows impact. '.repeat(12) + '\n## Chapter Index\nch01'); assert.equal(loadPrinciples(p).text.startsWith('## Core Frameworks'), true); assert.doesNotMatch(loadPrinciples(p).text, /Chapter Index|nav/)
   writeFileSync(p, '# Book\n' + 'TBD '.repeat(100)); assert.equal(loadPrinciples(p).source, 'pending')
 })
 test('buildReport never invents a score when the summarizer fails', async () => {
   const r = await buildReport(run, { summarizeImpl: (async () => { throw new Error('down') }) as any, principles:{ source:'pending', text:'' } })
   assert.equal(r.overallScore, null); assert.match(r.unableToRateReason!, /down/); assert.equal(r.succeeded, 1); assert.equal(r.total, 2); assert.equal(r.issues.length, 1); assert.match(r.issues[0].fixPrompt, /Principle: source pending/)
+  assert.equal(r.issues[0].title, 'Content needed for the task is hard to read or clipped at 2…')
   assert.equal(r.avatarNotes.length, 2)
+})
+test('runStats leaves technical failures out of the median', () => {
+  const r:any = { ...run, avatars:{ ...run.avatars, dev:{ avatarId:'dev', status:'failed', startedAt:'2026-10-25T00:00:00Z', steps:[] } } }
+  assert.equal(runStats(r).medianSteps, 1.5); assert.equal(runStats(r).total, 3)
+})
+test('blocked visitors get allowlist help in the assessment', async () => {
+  const blocked:any = { ...run, avatars:{ ...run.avatars, dev:{ avatarId:'dev', status:'failed', reason:'blocked: bot challenge (Just a moment...)', startedAt:'2026-10-25T00:00:00Z', steps:[] } } }
+  const r = await buildReport(blocked, { summarizeImpl: (async () => { throw new Error('down') }) as any, principles:{ source:'pending', text:'' } })
+  assert.match(r.assessment, /bot protection stopped Dev .*UXIE_ALLOWLIST_TOKEN/)
 })

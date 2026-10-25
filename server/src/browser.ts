@@ -8,14 +8,32 @@ export type PageState = { url:string; title:string; snapshot:string; pageText?:s
 let browserPromise: Promise<Browser> | undefined
 
 export async function getBrowser(): Promise<Browser> {
-  browserPromise ??= chromium.launch({ headless: true }).then(
+  // Full Chromium build: the default headless shell leaves page videos black.
+  browserPromise ??= chromium.launch({ headless: true, channel: 'chromium' }).then(
     b => { b.on('disconnected', () => { browserPromise = undefined }); return b },
     e => { browserPromise = undefined; throw e },
   )
   return browserPromise
 }
 
-export async function openAvatarPage(avatar:Avatar, url:string): Promise<{ context:BrowserContext; page:Page; interruptions:string[] }> {
+// The default desktop identity says "HeadlessChrome", which Cloudflare blocks on sight; a person's Chrome says "Chrome".
+let uaPromise: Promise<string> | undefined
+const desktopUA = (browser:Browser) => uaPromise ??= browser.newPage()
+  .then(async p => { const ua = await p.evaluate(() => navigator.userAgent); await p.context().close(); return ua.replace('HeadlessChrome', 'Chrome') })
+  .catch(e => { uaPromise = undefined; throw e })
+
+// Site-owner allowlist: requests to the tested site (and its subdomains) carry this header, which a Cloudflare custom
+// rule can match to skip bot checks. Never sent to third parties, so the token does not leak.
+export const ALLOW_HEADER = 'x-uxie-token'
+export const sameSite = (request:string, target:string) => {
+  try {
+    const r = new URL(request).hostname, t = new URL(target).hostname.replace(/^www\./, '')
+    return r === t || r.endsWith('.' + t)
+  } catch { return false }
+}
+
+// videoDir: record the session as a WebM there (Playwright names the file; the caller renames it).
+export async function openAvatarPage(avatar:Avatar, url:string, videoDir?:string): Promise<{ context:BrowserContext; page:Page; interruptions:string[] }> {
   const b = avatar.browser
   const browser = await getBrowser()
   // Device preset first so the avatar's own viewport wins (iPhone 15 preset is 393x659).
@@ -23,12 +41,15 @@ export async function openAvatarPage(avatar:Avatar, url:string): Promise<{ conte
   // so content reflows and screenshots stay correct (CSS zoom on <html> produced blank captures after scrolling).
   const zoom = b.zoom ?? 1
   const context = await browser.newContext({
-    ...(b.device ? devices[b.device] : {}),
+    ...(b.device ? devices[b.device] : { userAgent: await desktopUA(browser) }),
     viewport: { width: Math.round(b.viewport.width / zoom), height: Math.round(b.viewport.height / zoom) },
     ...(b.zoom ? { deviceScaleFactor: zoom } : {}),
     hasTouch: !!b.touch,
     ...(b.reducedMotion ? { reducedMotion: 'reduce' as const } : {}),
+    ...(videoDir ? { recordVideo: { dir: videoDir, size: { width: Math.round(b.viewport.width / zoom), height: Math.round(b.viewport.height / zoom) } } } : {}),
   })
+  const token = process.env.UXIE_ALLOWLIST_TOKEN
+  if (token) await context.route(u => sameSite(u.href, url), r => r.continue({ headers: { ...r.request().headers(), [ALLOW_HEADER]: token } }))
   const interruptions: string[] = []
   const wire = (p:Page) => {
     p.on('dialog', d => { interruptions.push('dialog: ' + d.message()); d.dismiss().catch(() => {}) })
