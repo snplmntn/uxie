@@ -5,7 +5,7 @@ Status: draft for hackathon build (Codex hackathon, one-afternoon target)
 
 ## Intent
 
-Teams ship UI that works in their own hands and fails for older users, first-timers, mobile-only visitors, or people with low vision or motor limits. Real usability tests are slow and expensive, so most changes go out on a guess.
+Teams ship UI that works in their own hands and fails for older users, first-timers, mobile-only visitors, or people with low vision or motor limits. Real usability tests are slow and expensive, so most changes go out on a guess. The MVP implements five avatars; other profiles below are future concepts only.
 
 Uxie lets a team paste a URL, pick a handful of simulated visitors (avatars), give them one goal, and watch each avatar attempt it in a real browser. The output is a list of concrete breakages, each with evidence and a copy-paste prompt the team can drop into Codex or Claude Code against their own repo.
 
@@ -36,7 +36,7 @@ Success at the demo: a judge pastes a link, picks three avatars, hits run, watch
 ## Constraints
 
 - Built during a Codex hackathon; target a working demo in one afternoon of build time.
-- LLM provider: OpenAI (Codex hackathon, ChatGPT API credits). Two endpoints: the Decisions API (`POST /v1/decisions`, model `gpt-6-luna`) for every per-step judgment, and the Responses API for anything that must be written (narration, report, fix prompts). Responses model id is the builder's call.
+- LLM provider: OpenAI (Codex hackathon). Use the Responses API with strict function calling for browser actions and structured outputs for report generation; keep the model ID configurable and select the current vision-capable model during implementation.
 - Must run on a single laptop for the demo. No external infra beyond the OpenAI API.
 
 ## User flow
@@ -46,7 +46,7 @@ Success at the demo: a judge pastes a link, picks three avatars, hits run, watch
 Single centered card.
 
 - URL field (required, must be http/https; show a clear inline error otherwise).
-- Avatar picker: ten avatar tiles in a grid, each with an illustration-style icon, name, and a one-line tagline. Multi-select; three preselected by default (Lola, Mika, Dev). Tiles show a short "what changes" line on hover (e.g. "200% zoom · reads everything · misses small targets").
+- Avatar picker: five MVP avatar tiles in a grid (Lola, Mika, Ava, Dev, Grace), each with an illustration-style icon, name, and a one-line tagline. Multi-select; Lola, Mika, and Dev preselected by default. Tiles show a short "what changes" line on hover (e.g. "200% zoom · reads everything · misses small targets").
 - Goal field with suggestion chips above it. Clicking a chip fills the field; the user can edit. Default chips:
   - Scroll the landing page and understand what this is
   - Sign up for an account
@@ -82,24 +82,21 @@ Shown automatically when every avatar is finished.
 
 ## Avatars
 
-Ten avatars. Each defines two things: a browser configuration (mechanical, applied via Playwright) and a persona block (injected into the agent's system prompt). Both are required; a persona with no browser change is not an avatar.
+The MVP includes five avatars: Lola, Mika, Ava, Dev, and Grace. Their machine-readable implementation contract is `2026-10-25-uxie-avatars.json`; each defines browser configuration, model perception, allowed actions, persona instructions, friction limits, and evidence requirements. A persona with no mechanical browser/action change is not an avatar. Tita Baby, Jun, Ren, Paolo, and Theo remain future concepts; their original profile notes below are reference material, not MVP implementation requirements.
 
 | # | Name | Who | Browser config | Persona rules |
 |---|------|-----|----------------|---------------|
-| 1 | Lola | Older user, low vision | Desktop 1280×800, page zoom 200%, prefers-reduced-motion, forced large default font | Reads everything top to bottom. Cannot act on text below ~16px effective or contrast below 4.5:1 (ask the model to judge from the screenshot). Slow: one action per step, no multi-step chaining. Patient but gives up after 4 consecutive confused steps. |
-| 2 | Mika | Mobile-only first-timer | iPhone 15 viewport and UA, touch, no hover | Never saw this site. Only taps; cannot hover or right-click. Targets under ~44px are "hard to hit": 30% of taps on them miss and are retried as a wasted step. Hates horizontal scroll and gives up on layouts that require it. |
-| 3 | Dev | Experienced user in a hurry | Desktop 1440×900, keyboard shortcuts allowed | Scans, does not read. Uses search, Cmd+K, Tab, Enter. Abandons after 3 steps of friction. Reports "this took too many clicks" as friction. |
-| 4 | Tita Baby | Non-technical, jargon-confused | Desktop 1366×768 | Does not know "dashboard", "workspace", "SSO", "OAuth", "integration", "API", "sync", "cache". Treats such words as unknown and looks for plainer options. Confused by icon-only buttons with no label. Trusts nothing that looks like an ad. |
-| 5 | Jun | English as a second language | Desktop 1366×768 | Reads literally. Idioms, puns, and clever marketing copy register as unclear. Prefers buttons that say the action. Will misread "Get started" vs "Sign in" if both are present and unclear. |
-| 6 | Ren | Keyboard-only, motor limitation | Desktop 1280×800, mouse disabled; agent may only Tab, Shift+Tab, Enter, Space, arrows, Esc | Can only reach what is focusable. Flags any step where the focused element is not visibly indicated. Blocked by focus traps and by controls that need hover or drag. |
-| 7 | Ava | Screen reader user | Desktop, no screenshot sent to the model; agent sees only the accessibility tree and page text | Navigates by headings, landmarks, links, and form labels. Images without alt text and unlabeled buttons are invisible to her. Flags any step where the goal element exists visually but not in the tree. |
-| 8 | Paolo | Slow connection, impatient | Desktop 1366×768, network throttled to ~1.5 Mbps / 300 ms RTT, CPU 4x slowdown | Waits at most 5 seconds for anything. A spinner or blank state longer than that is a wasted step and friction. Gives up after 3 such waits. |
-| 9 | Grace | Privacy-cautious skeptic | Desktop 1440×900, third-party cookies blocked | Declines cookie banners (rejects, never accepts). Will not enter an email until she has seen what the product does and what it costs. Looks for a privacy or terms link before any form. Flags dark patterns (pre-checked boxes, hidden decline). |
-| 10 | Theo | Color-blind (deuteranopia) | Desktop 1366×768, deuteranopia simulation applied to screenshots before the model sees them (CSS filter injected on page) | Cannot distinguish state conveyed by red/green alone: error vs success messages, required-field marks, chart legends, status dots. Flags any step where meaning was color-only. |
+| 1 | Lola | Older user, low vision | Desktop 1280×800, 200% zoom, reduced motion, large default font | Reads top-to-bottom, one action at a time. Reports hard-to-read text or small/crowded targets from screenshot evidence; gives up after 4 consecutive friction steps. |
+| 2 | Mika | Mobile-only first-timer | iPhone 15, touch-only, no hover or right-click | First visit; taps and scrolls only. A seeded 30% tap miss applies to targets under 44px in either dimension. Horizontal overflow and blocked popups are friction; gives up after 5 consecutive friction steps. |
+| 3 | Ava | Keyboard and screen-reader access | Desktop 1280×800, keyboard-only; model receives accessibility tree and page text, never a screenshot | Navigates by headings, landmarks, links, and form labels. Uses only keyboard actions. Reports missing/unusable controls from tree and keyboard evidence. Focus visibility is separate executor evidence, not something Ava judges visually. |
+| 4 | Dev | Experienced user in a hurry | Desktop 1440×900, keyboard shortcuts allowed | Scans for familiar patterns and expects common destinations. Reports avoidable steps only when shown by the action trace; gives up after 3 consecutive friction steps. |
+| 5 | Grace | Trust and clarity | Desktop 1440×900, third-party cookies blocked | Rejects optional cookies, expects clear product/pricing information before personal data, and flags jargon, vague labels, hidden decline choices, or pre-checked consent with exact UI evidence. Gives up after 5 consecutive friction steps. |
 
-### Avatar profiles
+### Persona reference
 
-The table above is the mechanical contract. These profiles are the persona block that goes into each agent's system prompt, written as a real person so the model acts like one. Narration in the run screen is in this voice.
+MVP personas are Lola, Mika, Dev, Ava, and Grace. The remaining persona notes in this section are deferred concepts and must not be implemented as MVP options.
+
+The five MVP profiles above are the implementation set. The JSON registry is their machine-readable contract. The remaining profiles below are deferred reference material only. Narration in the run screen follows the selected avatar's short persona instructions.
 
 **1. Lola, 71, retired teacher. Tagline: "Reads every word, misses the small ones."**
 Uses the family laptop with the browser zoomed way in. Starts at the top of every page and reads downward; never skims. Trusts text over icons and will not click something she cannot name. Light gray text, thin fonts, and tiny links near each other are the enemy; she either cannot read them or clicks the wrong one. When stuck she re-reads the page from the top, looks for a word like "Help" or a phone number, and after a few tries decides the site is "not for me." Narration: "Where is the sign in? I see something at the top but the letters are too faint to make out."
@@ -140,26 +137,24 @@ Each avatar has a name, a short tagline for the tile, and an icon. Icons: simple
 - Next.js (App Router, TypeScript, Tailwind) single app. Server handles runs; client renders launch, run, and report screens.
 - One Playwright Chromium instance per run; one browser context per avatar, launched in parallel.
 - One agent loop per avatar. Each step:
-  1. Capture state: screenshot (unless avatar 7), accessibility snapshot via Playwright's `ariaSnapshot()` (5–20 KB, the same thing Playwright MCP uses), current URL, page title.
-  2. Build the candidate action list from the snapshot: one option per interactive element (`click <role> "<name>"`), one `type <avatar value> into <field>` option per text field whose label matches the avatar's fixed form data (see below), plus `scroll down`, `scroll up`, `press Escape`, `done`, `give up`. Ren's list contains only key presses. Cap at ~40 options; prefer elements in or near the viewport.
-  3. One Decisions API request per step, shared `input` = base rules + avatar persona + goal + last N steps summarized + screenshot (and/or snapshot). Questions in the same request:
-     - `next_action` (choice over the candidate list). The returned `probabilities` are kept: a flat distribution (top two within ~15 points) is logged as hesitation, which counts as friction. This is how Jun's "two buttons, not sure which" becomes data.
-     - `goal_reached` (predicate) on every step; `done` is only accepted when this is high.
-     - Avatar-specific judgments as extra questions: Ren `focus_visible` (predicate), Lola `readable` (score over 3 levels), Theo `meaning_by_color_only` (predicate), Mika `target_too_small` (predicate), Tita Baby `jargon_present` (predicate), Grace `dark_pattern` (predicate).
-  4. Execute the chosen action with Playwright. If the target cannot be resolved, record a failed step (counts as friction) and continue.
-  5. In parallel, off the critical path, one small Responses API call writes the one-line narration in persona from the chosen action and any flagged judgments. If it has not returned by the next step, the step is shown with a templated line ("Clicking 'Sign in'") and updated when it arrives.
+  1. Capture state according to the selected avatar's perception settings: screenshot only when allowed, accessibility snapshot, current URL, and page title.
+  2. Build candidate actions from the current snapshot. Restrict actions and keys to the avatar registry. Ava gets keyboard actions only; Mika gets touch taps. Cap the candidate list at ~40 options.
+  3. Make one Responses API function call per step with base rules, avatar instructions, goal, short recent history, current page state, and permitted image input. Use a strict action schema and validate the tool call before execution.
+  4. `done` is only a claim. Verify goal completion against the resulting page state in a separate verifier call; unclear is never success.
+  5. Execute the chosen action with Playwright. If the target cannot be resolved, record a failed step (counts as friction) and continue.
   6. Emit a step event to the client over Server-Sent Events: avatar id, step number, narration, screenshot path, friction if any.
+- Avatar-specific friction must cite evidence: Lola can flag readability from her zoomed screenshot; Mika's target size and missed taps are measured by the executor; Ava reports accessibility-tree/keyboard barriers while focus visibility is separate executor evidence; Dev's wasted steps come from the trace; Grace cites exact copy or privacy behavior.
 
   Typed text is never generated. Each avatar carries fixed form data (full name, email on a throwaway domain, password, phone, a search term fallback). Field matching is by label or placeholder keywords (email, name, password, phone, search). Search terms in the goal override the fallback. Unmatched fields get the avatar's name; that mismatch is itself logged as friction ("I don't know what to put here").
 
-  The Decisions API answers; it does not write or act. Everything written to the user (narration, issue descriptions, fix prompts) goes through the Responses API. All model access lives in one module so the Decisions loop can be swapped for Responses with structured outputs if it misbehaves during the hackathon.
-- Caps per avatar: 25 steps or 4 minutes, whichever first. Avatar-specific give-up rules are applied by the model via persona, with a hard floor enforced server-side.
-- Element targeting: the model picks elements by accessibility-tree reference (role + name + index) rather than raw coordinates. Coordinates are a fallback for avatars 1 and 2 where a visible element is missing from the tree, and that gap is itself logged as friction.
+  All model access uses the Responses API. Model output is never executed without schema validation and server-side action checks.
+- Caps per avatar: 25 steps or 4 minutes, whichever comes first. Give-up thresholds are enforced server-side from the avatar registry: Lola 4, Dev 3, Mika/Ava/Grace 5.
+- Element targeting: use current accessibility-tree references (role + name + index). Coordinates are not available to Ava; any permitted visual fallback for other avatars must be logged with evidence.
 - Avatar browser configs are applied at context creation: viewport, device emulation, zoom (via CSS zoom or deviceScaleFactor plus font-size injection), network throttling via CDP, cookie policy, injected CSS filters.
 
 ### Report generation
 
-After all avatars finish, one Responses API call takes every avatar's step log, friction list, and judgment probabilities and produces:
+After all selected avatars finish, one Responses API call takes their step logs, friction events, and evidence references and produces:
 
 - Deduplicated issues: the same stall hit by multiple avatars is one issue with multiple avatars attached.
 - Severity per issue per the rules above.
@@ -192,8 +187,8 @@ Expected contents, each principle with a one-line rule and a one-line "how it sh
 How it is used:
 
 1. **Report.** The summarizer call loads the skill and must name the violated principle on every issue card ("Breaks: recognition over recall"), and the fix prompt cites it. This keeps the report from reading like a generic lint list.
-2. **Judgments.** The avatar-specific Decisions questions take their `instructions` text from the matching principle so the thresholds (16px, 4.5:1, 44px) are defined once.
-3. **Uxie's own UI.** Whoever builds the launch, run, and report screens loads the same skill and reviews each screen against it before calling it done. Uxie should pass its own preflight: running Uxie on Uxie with Lola, Mika, and Ren is the last check before the demo.
+2. **Avatar checks.** Model-reported findings cite the page evidence; measurable rules such as target dimensions, action failures, and friction caps are computed in code.
+3. **Uxie's own UI.** Whoever builds the launch, run, and report screens loads the same skill and reviews each screen against it before calling it done. Uxie should pass its own preflight with Lola, Mika, and Ava before the demo.
 
 ### Design language
 
@@ -202,25 +197,24 @@ How it is used:
 - Generous spacing; nothing touches. Max content width ~1100px.
 - Motion limited to preview refresh crossfade and card expand.
 - Avatars rendered as tiles, not a dropdown. Avatar icons are the only illustration in the app.
-- Severity uses color plus a label and icon, never color alone (Theo would flag us).
+- Severity uses color plus a label and icon, never color alone.
 
 ### Decisions from the builder check (author's calls)
 
-- **Success is verified, not claimed.** `done` is a claim. The `goal_reached` predicate on the final state (screenshot, or tree for Ava, plus final URL) is the verdict: ≥0.8 reached, ≤0.3 not reached, between is "unverified". Only reached counts as success; unverified is shown as such in the report, never as a pass.
-- **Per-avatar action sets.** Ren's actions are restricted to key presses; `click(target)` is not available. After every Tab the executor screenshots and asks the model whether the focused element is visibly indicated; "no" is logged as friction. Ava's state is the accessibility tree plus trimmed `innerText`; no screenshot is ever sent for her.
-- **Give-up floors live in code.** The server counts consecutive friction steps (model-flagged friction or a failed action) per avatar and ends the run as "gave up" at the avatar's threshold: Lola 4, Dev 3, Paolo 3 wait-timeouts, everyone else 5. The model may give up earlier via `give_up`.
-- **Mechanical rules are enforced in code where possible.** Mika's tap miss is a seeded 30% roll on any target whose box is under 44px in either dimension; the seed is the run id so a run replays identically. Paolo's wait is `waitForLoadState('networkidle')` with a 5 s timeout; timeout = wasted step + friction. Lola's size and contrast judgment stays with the model from the zoomed screenshot.
+- **Success is verified, not claimed.** `done` is a claim. Verify the goal against the final page state (screenshot for vision-enabled avatars, accessibility tree for Ava, plus final URL). Only `reached` counts as success; `unclear` is never a pass.
+- **Per-avatar action sets.** Ava's actions are restricted to keyboard input and scrolling; the model receives the accessibility tree plus trimmed `innerText`, never a screenshot. Focus visibility, if checked, is attached as executor evidence and is not shown to Ava's model.
+- **Give-up floors live in code.** The server counts consecutive evidence-backed friction steps or failed actions and ends the run at registry thresholds: Lola 4, Dev 3, Mika/Ava/Grace 5. The model may give up earlier via `give_up`.
+- **Mechanical rules are enforced in code where possible.** Mika's tap miss is a seeded 30% roll on targets under 44px in either dimension; the seed is the run ID. Lola's readability judgment uses the zoomed screenshot and states uncertainty where appearance does not establish a measurement.
 - **Bounding boxes come from the executor.** Resolving a tree reference to an element at action time records its bounding box on the step; the report highlight uses that box. The summarizer deduplicates issues on page URL plus accessible name, falling back to description similarity.
-- **Concurrency and partial results.** Model calls go through a semaphore of 5 across all avatars. Stop, a crashed avatar, or a cap produce a partial report from whatever steps exist; the report is never withheld. Default selection is three avatars so the demo stays fast.
+- **Concurrency and partial results.** Model calls go through a semaphore of 5 across selected avatars. Stop, a crashed avatar, or a cap produce a partial report from whatever steps exist; the report is never withheld. Default selection is Lola, Mika, and Dev so the demo stays fast.
 - **Contexts and pages.** Each avatar has an isolated context (own cookies and storage). If the page opens a new tab, the agent follows the newest page. Downloads and native dialogs are auto-dismissed and logged as friction.
 
 ## Left to the builder
 
 - Responses API model id for narration and the report.
 - How the aria snapshot is trimmed to the ~40-option candidate list and the context budget.
-- Exact hesitation threshold and the predicate cutoffs for each avatar judgment; tune on two or three real sites before the demo.
+- Prompt quality and report thresholds; tune against the fixed avatar evaluation cases before real-site demos.
 - Zoom implementation details for Lola (CSS zoom vs deviceScaleFactor plus font injection); whichever produces screenshots the model reads correctly.
-- Deuteranopia filter matrix values.
 - Screenshot cadence for previews if per-step proves too chatty.
 - Whether the report summarizer runs once or once per avatar then merges.
 - Test coverage: one check for the action parser and one for the issue deduplication is enough; no browser tests in the hackathon window.
