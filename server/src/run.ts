@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { mkdirSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import type { AvatarId, AvatarRun, Report, Run, RunEvent } from './types.ts'
+import type { AvatarId, AvatarRun, Run, RunEvent } from './types.ts'
 import { getAvatar } from './avatars.ts'
 import { runAvatar } from './agent.ts'
+import { buildReport, fallbackReport } from './report.ts'
 
 export type RunRequest = { url:string; goal:string; avatarIds:AvatarId[] }
 
@@ -51,7 +52,8 @@ function emit(run:Run, e:RunEvent) {
 
 export function stopRun(id:string): void {
   const run = runs.get(id)
-  if (!run || run.status !== 'running') return
+  // No-op once every avatar has ended: the report is being generated and the run is not partial.
+  if (!run || run.status !== 'running' || !Object.values(run.avatars).some(a => a.status === 'running')) return
   run.status = 'stopping'
   emit(run, { type:'run_status', status:'stopping' })
 }
@@ -80,28 +82,11 @@ async function finish(run:Run, tasks:Promise<AvatarRun>[]) {
     if (r.status === 'rejected' && a.status === 'running')
       emit(run, { type:'avatar_status', avatarId:a.avatarId, status:'failed', reason:String((r.reason as Error)?.message ?? r.reason) })
   })
-  run.status = 'finished'
   try { run.report = await buildReport(run) }
-  catch (e) { console.error('buildReport failed', e); run.report = stubReport(run, 'report failed: ' + (e as Error).message) }
+  catch (e) { console.error('buildReport failed', e); run.report = fallbackReport(run, [], 'pending', 'report failed: ' + (e as Error).message) }
+  // Finished only once the report exists, so a late joiner never sees finished without one.
+  run.status = 'finished'
   emit(run, { type:'report', report:run.report })
   emit(run, { type:'run_status', status:'finished' })
   listeners.delete(run.id)
-}
-
-// ponytail: stub until Task 8's buildReport lands; only the run statistics are real.
-async function buildReport(run:Run): Promise<Report> { return stubReport(run, 'report not implemented') }
-
-function stubReport(run:Run, unableToRateReason:string): Report {
-  const avatars = Object.values(run.avatars).map(a => ({
-    avatarId:a.avatarId, status:a.status, steps:a.steps.length,
-    seconds:Math.round((Date.parse(a.endedAt ?? new Date().toISOString()) - Date.parse(a.startedAt)) / 1000),
-  }))
-  const counts = avatars.map(a => a.steps).sort((x, y) => x - y)
-  const mid = counts.length >> 1
-  const medianSteps = counts.length ? (counts.length % 2 ? counts[mid] : (counts[mid - 1] + counts[mid]) / 2) : 0
-  return {
-    runId:run.id, goal:run.goal, url:run.url, partial:avatars.some(a => a.status === 'stopped'), principlesSource:'pending',
-    overallScore:null, unableToRateReason, assessment:'', avatarNotes:[], recommendations:[], issues:[],
-    succeeded:avatars.filter(a => a.status === 'done').length, total:avatars.length, medianSteps, avatars,
-  }
 }

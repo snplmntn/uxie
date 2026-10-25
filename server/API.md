@@ -26,7 +26,7 @@ The run starts immediately; all chosen avatars run in parallel.
 
 ### POST /runs/:id/stop
 
-Sets the run to `stopping`. Each avatar finishes its in-flight step, then ends `stopped`. The run then finishes normally (a `report` with `partial: true`, then `run_status: finished`). Stopping a run that is not `running` is a no-op that still returns `{ ok:true }`.
+Sets the run to `stopping`. Each avatar finishes its in-flight step, then ends `stopped`. The run then finishes normally (a `report` with `partial: true`, then `run_status: finished`). Stopping a run that is not `running`, or whose avatars have all ended (report in progress), is a no-op that still returns `{ ok:true }`.
 
 ### GET /runs/:id/events (SSE)
 
@@ -44,7 +44,7 @@ On connect the server first replays the current state, then streams live events:
 2. for each avatar (in request order): every existing `step`, then one `avatar_status` with its current status (`running` if still going),
 3. the `report`, if the run already finished.
 
-Live events follow. A new run emits `avatar_status: running` for every avatar, then `step` events as avatars act, one final `avatar_status` per avatar, a `run_status: stopping` if stopped, and when every avatar has ended: **`report` first, then `run_status: finished`**. The server keeps the connection open after that; close your `EventSource` when you receive `run_status: finished` (otherwise the browser reconnects and receives the replay again).
+Live events follow. A new run emits `avatar_status: running` for every avatar, then `step` events as avatars act, one final `avatar_status` per avatar, a `run_status: stopping` if stopped, and when every avatar has ended: **`report` first, then `run_status: finished`**. While the report is being generated the run status stays `running` (or `stopping`), so `finished` is never visible without a report. The server keeps the connection open after that; close your `EventSource` when you receive `run_status: finished` (otherwise the browser reconnects and receives the replay again).
 
 ### Screenshots
 
@@ -70,7 +70,7 @@ Avatar statuses: `running` → one of `done` (goal reached), `unverified` (said 
 
 - `report.overallScore === null` → show **"Unable to rate"** with `report.unableToRateReason`. Never substitute a number.
 - `report.principlesSource === 'pending'` → show **"UI/UX principles source pending"**.
-- `report.partial === true` → the run was stopped; label results as partial.
+- `report.partial === true` → the run was stopped or an avatar ended `stopped`/`failed`; label results as partial.
 
 ## Types (`server/src/types.ts`, verbatim)
 
