@@ -8,4 +8,6 @@ COPY server/src ./src
 COPY avatars ../avatars
 COPY .agents/skills/tullis-albert-ux-metrics/SKILL.md ../.agents/skills/tullis-albert-ux-metrics/SKILL.md
 ENV NODE_ENV=production
+# Render free (512 MB) fits one browser at a time; raise on a bigger plan via the dashboard.
+ENV MAX_PARALLEL_VISITORS=1
 CMD ["node", "src/index.ts"]
