@@ -32,10 +32,13 @@ const END: Candidate[] = [
   { value:'give_up', description:'give up', action:{ kind:'give_up' } },
 ]
 
+// ponytail: name heuristics for consent buttons; upgrade to banner-scoped detection if a site trips it
+const ACCEPT = /\b(accept|allow|agree)\b/i, DECLINE = /\b(reject|decline|refuse|necessary|essential)\b/i
+
 export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[] {
-  if (avatar.browser.keyboardOnly) return [
-    press('Tab'), press('Shift+Tab', 'press_shift_tab'), press('Enter'), press('Space'),
-    press('ArrowDown'), press('ArrowUp'), press('Escape'), ...END,
+  const ic = avatar.interactionConstraints
+  if (ic.activationMode === 'keyboard') return [
+    ...(ic.allowedKeys ?? []).map(k => press(k, `press_${k.toLowerCase().replace('+', '_')}`)), ...END,
   ]
   const tail: Candidate[] = [
     { value:'scroll_down', description:'scroll down', action:{ kind:'scroll', direction:'down' } },
@@ -44,7 +47,9 @@ export function buildCandidates(snapshot:string, avatar:Avatar): Candidate[] {
   ]
   const verb = avatar.browser.touch ? 'tap' : 'click'
   // ponytail: document order, no viewport proximity; upgrade to box-sorted when snapshot carries positions
-  const clicks = parseSnapshot(snapshot).filter(n => n.name).slice(0, MAX - tail.length).map((n, i): Candidate => ({
+  let nodes = parseSnapshot(snapshot).filter(n => n.name)
+  if (ic.neverAcceptOptionalCookies && nodes.some(n => DECLINE.test(n.name))) nodes = nodes.filter(n => !ACCEPT.test(n.name))
+  const clicks = nodes.slice(0, MAX - tail.length).map((n, i): Candidate => ({
     value: `click_${i}`,
     description: `${verb} ${n.role} "${n.name}"`,
     action: { kind:'click', ref: refFor(n), label: n.name },

@@ -27,9 +27,17 @@ test('buildCandidates: named clicks only, control actions last, cap 40, Mika tap
   const big = Array.from({length: 80}, (_, i) => `- link "L${i}"`).join('\n')
   assert.equal(buildCandidates(big, getAvatar('dev')!).length, 40)
 })
-test('Ren gets the permitted key presses only', () => {
-  const c = buildCandidates(snap, getAvatar('ren')!)
-  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowdown','press_arrowup','press_escape','done','give_up'])
+test('Ava gets the permitted key presses only', () => {
+  const c = buildCandidates(snap, getAvatar('ava')!)
+  assert.deepEqual(c.map(x => x.value), ['press_tab','press_shift_tab','press_enter','press_space','press_arrowup','press_arrowdown','press_arrowleft','press_arrowright','press_escape','done','give_up'])
+  assert.ok(c.every(x => ['press','done','give_up'].includes(x.action.kind)))
+})
+test('Grace never gets an accept-cookies candidate when a reject choice exists', () => {
+  const banner = `- button "Accept all cookies"\n- button "Reject all"\n- link "Pricing"`
+  const g = buildCandidates(banner, getAvatar('grace')!).map(x => x.description)
+  assert.ok(!g.some(d => /Accept all/.test(d))); assert.ok(g.some(d => /Reject all/.test(d))); assert.ok(g.some(d => /Pricing/.test(d)))
+  assert.ok(buildCandidates(banner, getAvatar('dev')!).some(x => /Accept all/.test(x.description)))
+  assert.ok(buildCandidates(`- button "Accept all cookies"`, getAvatar('grace')!).some(x => /Accept all/.test(x.description)))
 })
 test('parseSnapshot reads single-quoted keys', () => {
   assert.deepEqual(parseSnapshot(`- 'link "Note: x"'\n- 'button "It''s \\"on\\""'`).map(n => [n.role, n.name, n.index]),

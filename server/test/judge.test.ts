@@ -5,9 +5,9 @@ import { getAvatar } from '../src/avatars.ts'
 import { buildCandidates } from '../src/candidates.ts'
 const base = (id:string) => ({ avatar:getAvatar(id)!, goal:'Find the pricing', url:'https://x.test', title:'X', snapshot:'- link "Pricing"', history:[], candidates:buildCandidates('- link "Pricing"', getAvatar(id)!) })
 test('request carries next_action, goal_reached and avatar judgments; Ava never gets an image', () => {
-  const r:any = buildDecisionRequest({ ...base('ren'), screenshotB64:'AAA=', focused:'link|Pricing|0' })
+  const r:any = buildDecisionRequest({ ...base('grace'), screenshotB64:'AAA=' })
   assert.equal(r.model, 'gpt-6-luna')
-  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','content_clear','focus_visible'])
+  assert.deepEqual(r.questions.map((q:any) => q.name), ['next_action','goal_reached','content_clear','consent_choice_clear'])
   assert.ok(r.input[0].content.some((c:any) => c.type === 'input_image'))
   const a:any = buildDecisionRequest({ ...base('ava'), screenshotB64:'AAA=', pageText:'Plans from $9' })
   assert.ok(!a.input[0].content.some((c:any) => c.type === 'input_image'))

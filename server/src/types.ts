@@ -1,4 +1,4 @@
-export type AvatarId = 'lola'|'mika'|'dev'|'ren'|'ava'
+export type AvatarId = 'lola'|'mika'|'ava'|'dev'|'grace'
 export type Severity = 'blocker'|'major'|'minor'
 export type Box = { x:number; y:number; width:number; height:number }
 export type BrowserConfig = {
@@ -7,7 +7,7 @@ export type BrowserConfig = {
   touch?: boolean               // Mika: element actions use tap()
   zoom?: number                 // Lola: CSS zoom on documentElement, 2
   reducedMotion?: boolean
-  keyboardOnly?: boolean        // Ren
+  keyboardOnly?: boolean        // Ava: key presses only
   noScreenshot?: boolean        // Ava: model gets tree + text only
 }
 export type Judgment = {
@@ -15,7 +15,16 @@ export type Judgment = {
   levels?: { label:string; description:string }[]
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
-export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
+export type InteractionConstraints = {
+  activationMode:'standard-desktop'|'touch'|'keyboard'
+  allowedKeys?:string[]; pointer?:boolean; hover?:boolean; rightClick?:boolean
+  coordinateFallback?:boolean; injectMissedTaps?:boolean
+  targetMustAppearInProvidedInputs?:boolean; modelReceivesScreenshot?:boolean
+  cookieChoice?:'reject-optional-or-necessary-only'; neverAcceptOptionalCookies?:boolean
+  neverEnterPersonalData?:boolean
+  focusIndicatorInspection?:string
+}
+export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; interactionConstraints:InteractionConstraints; giveUpAfter:number; judgments:Judgment[] }
 export type Action =
   | { kind:'click'; ref:string; label:string }
   | { kind:'scroll'; direction:'up'|'down' }

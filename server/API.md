@@ -48,17 +48,17 @@ Live events follow. A new run emits `avatar_status: running` for every avatar, t
 
 ### Screenshots
 
-`Step.screenshot` is a path like `/screenshots/<runId>/<avatarId>-<n>.png`; prefix it with the base URL. It is `null` when no screenshot was taken. Ava (`noScreenshot`) still gets a screenshot file for the UI, but her model never sees it; her steps also carry `treeExcerpt`.
+`Step.screenshot` is a path like `/screenshots/<runId>/<avatarId>-<n>.png`; prefix it with the base URL. It is `null` when no screenshot was taken. Ava (`noScreenshot`, keyboard-only) still gets a screenshot file for the UI, but her model never sees it; her steps also carry `treeExcerpt` and her keyboard-only candidates come from `interactionConstraints.allowedKeys`. Grace never gets an accept-cookies candidate when a reject or necessary-only choice is on the page.
 
 ## Avatars
 
 | id | name | age | tagline | what changes | gives up after N consecutive friction steps |
 |---|---|---|---|---|---|
-| `lola` | Lola | 71 | Reads every word, misses the small ones. | Desktop 1280×800, content enlarged to 200%, prefers-reduced-motion | 4 |
-| `mika` | Mika | 24 | Thumbs only, zero patience for pinching. | iPhone 15 viewport and UA, touch, no hover | 5 |
-| `dev` | Dev | 33 | Knows the pattern, resents the detour. | Desktop 1440×900, ordinary mouse and keyboard actions | 3 |
-| `ren` | Ren | 41 | If I can't Tab to it, it isn't there. | Desktop 1280×800, pointer actions unavailable; only Tab, Shift+Tab, Enter, Space, arrows, Esc | 5 |
-| `ava` | Ava | 36 | Hears the page, never sees it. | Desktop 1280×800; model receives only the accessibility tree and page text, never screenshots or visual coordinates | 5 |
+| `lola` | Lola | 71 | Reads every word, misses the small ones. | Desktop content is enlarged to 200% and reduced motion is enabled. | 4 |
+| `mika` | Mika | 24 | Thumbs only, zero patience for pinching. | iPhone 15 emulation and touch-only element activation; no hover or artificial missed taps. | 5 |
+| `ava` | Ava | 36 | If it's not in the tree or keyboard path, I can't use it. | Keyboard-only actions and accessibility-tree/page-text inputs; the model never receives screenshots or visual coordinates. | 5 |
+| `dev` | Dev | 33 | Knows the pattern, resents the detour. | Ordinary desktop baseline; looks for familiar navigation and labels. | 3 |
+| `grace` | Grace | 45 | Show me what it is and what it costs before asking for my details. | Privacy-conscious cookie choices and close attention to plain language, consent, and when personal data is requested. | 5 |
 
 Defaults: goal `"Find the pricing"`; each avatar stops after 25 steps or 240 s (status from its last `goalReached`, `reason: "cap"`).
 
@@ -75,7 +75,7 @@ Avatar statuses: `running` → one of `done` (goal reached), `unverified` (said 
 ## Types (`server/src/types.ts`, verbatim)
 
 ```ts
-export type AvatarId = 'lola'|'mika'|'dev'|'ren'|'ava'
+export type AvatarId = 'lola'|'mika'|'ava'|'dev'|'grace'
 export type Severity = 'blocker'|'major'|'minor'
 export type Box = { x:number; y:number; width:number; height:number }
 export type BrowserConfig = {
@@ -84,7 +84,7 @@ export type BrowserConfig = {
   touch?: boolean               // Mika: element actions use tap()
   zoom?: number                 // Lola: CSS zoom on documentElement, 2
   reducedMotion?: boolean
-  keyboardOnly?: boolean        // Ren
+  keyboardOnly?: boolean        // Ava: key presses only
   noScreenshot?: boolean        // Ava: model gets tree + text only
 }
 export type Judgment = {
@@ -92,7 +92,16 @@ export type Judgment = {
   levels?: { label:string; description:string }[]
   frictionWhen:(value:number)=>boolean; severity:Severity; description:string
 }
-export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; giveUpAfter:number; judgments:Judgment[] }
+export type InteractionConstraints = {
+  activationMode:'standard-desktop'|'touch'|'keyboard'
+  allowedKeys?:string[]; pointer?:boolean; hover?:boolean; rightClick?:boolean
+  coordinateFallback?:boolean; injectMissedTaps?:boolean
+  targetMustAppearInProvidedInputs?:boolean; modelReceivesScreenshot?:boolean
+  cookieChoice?:'reject-optional-or-necessary-only'; neverAcceptOptionalCookies?:boolean
+  neverEnterPersonalData?:boolean
+  focusIndicatorInspection?:string
+}
+export type Avatar = { id:AvatarId; name:string; age:number; tagline:string; whatChanges:string; bio:string; persona:string; browser:BrowserConfig; interactionConstraints:InteractionConstraints; giveUpAfter:number; judgments:Judgment[] }
 export type Action =
   | { kind:'click'; ref:string; label:string }
   | { kind:'scroll'; direction:'up'|'down' }

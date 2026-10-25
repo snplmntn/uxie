@@ -4,7 +4,7 @@ import { labelFor, resolveLocator } from '../src/executor.ts'; import { getAvata
 test('labels are templated per action and avatar', () => {
   assert.equal(labelFor({kind:'click',ref:'link|Pricing|0',label:'Pricing'}, getAvatar('dev')!), 'Opening "Pricing"')
   assert.equal(labelFor({kind:'click',ref:'link|Pricing|0',label:'Pricing'}, getAvatar('mika')!), 'Tapping "Pricing"')
-  assert.equal(labelFor({kind:'press',key:'Shift+Tab'}, getAvatar('ren')!), 'Pressing Shift+Tab')
+  assert.equal(labelFor({kind:'press',key:'Shift+Tab'}, getAvatar('ava')!), 'Pressing Shift+Tab')
   assert.equal(labelFor({kind:'scroll',direction:'down'}, getAvatar('lola')!), 'Scrolling down')
 })
 

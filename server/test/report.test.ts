@@ -5,9 +5,9 @@ import { writeFileSync, mkdtempSync } from 'node:fs'; import { join } from 'node
 const step = (avatarId:any, n:number, url:string, friction:any[]) => ({ avatarId, n, url, title:'t', action:{kind:'scroll',direction:'down'}, label:'Scrolling down', screenshot:`/screenshots/r/${avatarId}-${n}.png`, friction, confidence:1, judgments:{}, goalReached:0, at:'' })
 const run:any = { id:'r', url:'https://a.com', goal:'Find the pricing', status:'finished', startedAt:'2026-10-25T00:00:00Z', avatars:{
   lola:{ avatarId:'lola', status:'gave_up', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:01:00Z', steps:[ step('lola',1,'https://a.com/pricing',[{severity:'major',description:'Content needed for the task is hard to read or clipped at 200% enlargement',element:'link|Pricing|0'}]) ] },
-  ren:{ avatarId:'ren', status:'done', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:00:30Z', steps:[ step('ren',1,'https://a.com/pricing?x=1',[{severity:'blocker',description:'Content needed for the task is hard to read or clipped at 200% enlargement',element:'link|Pricing|0'}]), step('ren',2,'https://a.com/',[]) ] } } }
+  ava:{ avatarId:'ava', status:'done', startedAt:'2026-10-25T00:00:00Z', endedAt:'2026-10-25T00:00:30Z', steps:[ step('ava',1,'https://a.com/pricing?x=1',[{severity:'blocker',description:'Content needed for the task is hard to read or clipped at 200% enlargement',element:'link|Pricing|0'}]), step('ava',2,'https://a.com/',[]) ] } } }
 test('clusterFriction merges same path, element and problem; max severity; blockers first', () => {
-  const c = clusterFriction(run); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker'); assert.deepEqual(c[0].avatarIds.sort(), ['lola','ren']); assert.equal(c[0].stepRefs.length, 2)
+  const c = clusterFriction(run); assert.equal(c.length, 1); assert.equal(c[0].severity, 'blocker'); assert.deepEqual(c[0].avatarIds.sort(), ['ava','lola']); assert.equal(c[0].stepRefs.length, 2)
 })
 test('clusterFriction promotes majors in a friction-floor give-up streak to blocker', () => {
   const f = [{ severity:'major', description:'Hard to read', element:'link|Pricing|0' }]

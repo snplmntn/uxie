@@ -17,8 +17,6 @@ export function frictionFromStep(decision:Decision, exec:ExecResult, avatar:Avat
   if (!exec.ok) return []
   const out: Friction[] = []
   for (const j of [...SHARED_JUDGMENTS, ...avatar.judgments]) {
-    // Focus visibility is only judgeable once a Tab has landed on something.
-    if (j.name === 'focus_visible' && (!focused || focused === 'none')) continue
     const v = decision.judgments[j.name]
     if (j.name === 'target_too_small' && exec.box) {
       // A measured box overrides the model's guess either way.
