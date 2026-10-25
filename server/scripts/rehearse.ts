@@ -8,7 +8,7 @@ import type { Report, RunEvent } from '../src/types.ts'
 process.env.PORT ||= '4100'
 const { RUNS_DIR } = await import('../src/run.ts')
 await import('../src/index.ts')
-const base = 'http://localhost:4100'
+const base = `http://localhost:${process.env.PORT}`
 
 const url = process.env.URL || 'https://withamplify.ai'
 const goal = process.env.GOAL || 'Find the pricing'
