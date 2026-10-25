@@ -6,6 +6,6 @@ COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev && npx playwright install --with-deps chromium && rm -rf /var/lib/apt/lists/*
 COPY server/src ./src
 COPY avatars ../avatars
-COPY .claude/skills/tullis-albert-ux-metrics/SKILL.md ../.claude/skills/tullis-albert-ux-metrics/SKILL.md
+COPY .agents/skills/tullis-albert-ux-metrics/SKILL.md ../.agents/skills/tullis-albert-ux-metrics/SKILL.md
 ENV NODE_ENV=production
 CMD ["node", "src/index.ts"]

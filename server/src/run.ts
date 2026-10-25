@@ -44,7 +44,7 @@ function emit(run:Run, e:RunEvent) {
     a.status = e.status
     if (e.reason) a.reason = e.reason
     if (e.video) a.video = e.video
-    if (e.status !== 'running') a.endedAt ??= new Date().toISOString()
+    if (e.status !== 'running' && e.status !== 'queued') a.endedAt ??= new Date().toISOString()
   }
   for (const fn of listeners.get(run.id) ?? []) {
     try { fn(e) } catch (err) { console.error('run listener failed', err) }
@@ -59,6 +59,13 @@ export function stopRun(id:string): void {
   emit(run, { type:'run_status', status:'stopping' })
 }
 
+// Browsers running at once across all runs. Small hosts (Render free: 512 MB) need 1; unset means no limit.
+const MAX_BROWSERS = Number(process.env.MAX_PARALLEL_VISITORS) || Infinity
+let active = 0
+const waiting: (() => void)[] = []
+async function slot() { while (active >= MAX_BROWSERS) await new Promise<void>(r => waiting.push(r)); active++ }
+function release() { active--; waiting.shift()?.() }
+
 export function createRun(req:RunRequest): Run {
   const id = randomUUID()
   const runDir = RUNS_DIR + id
@@ -68,9 +75,13 @@ export function createRun(req:RunRequest): Run {
   for (const avatarId of req.avatarIds) run.avatars[avatarId] = { avatarId, status:'running', steps:[], startedAt:now }
   runs.set(id, run)
   const isStopping = () => run.status === 'stopping'
-  const tasks = req.avatarIds.map(avatarId => {
-    emit(run, { type:'avatar_status', avatarId, status:'running' })
-    return runAvatar({ runId:id, url:req.url, goal:req.goal, avatar:getAvatar(avatarId)!, runDir, isStopping, emit:e => emit(run, e) })
+  const tasks = req.avatarIds.map(async avatarId => {
+    if (active >= MAX_BROWSERS) emit(run, { type:'avatar_status', avatarId, status:'queued' })
+    await slot()
+    try {
+      emit(run, { type:'avatar_status', avatarId, status:'running' })
+      return await runAvatar({ runId:id, url:req.url, goal:req.goal, avatar:getAvatar(avatarId)!, runDir, isStopping, emit:e => emit(run, e) })
+    } finally { release() }
   })
   void finish(run, tasks)
   return run

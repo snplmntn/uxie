@@ -52,48 +52,48 @@ export const SCRIPT: Record<AvatarId, { outcome: AvatarStatus; steps: DemoStep[]
 }
 
 type DemoIssue = {
-  id: string; severity: Severity; title: string; page: string; preview: Preview
+  id: string; principle: string; severity: Severity; title: string; page: string; preview: Preview
   quotes: Partial<Record<AvatarId, string>>; element: string; what: string; fix: string; verify: string
   rec: { title: string; why: string }
 }
 
 export const ISSUES: DemoIssue[] = [
-  { id: 'trap', severity: 'blocker', title: 'Cookie banner traps keyboard focus', page: '/', preview: { overlay: 'cookie', target: 'cookieClose' },
+  { id: 'trap', principle: 'Tullis & Albert, Ch 5: high severity, the issue directly causes task failure', severity: 'blocker', title: 'Cookie banner traps keyboard focus', page: '/', preview: { overlay: 'cookie', target: 'cookieClose' },
     quotes: { ava: 'Tab just loops between ‘Accept all’ and a button with no name. Enter does nothing, and Escape does nothing.' },
     element: 'cookie banner (div.cookie-banner), div "Accept all", unnamed close button',
     what: 'The cookie banner takes focus when it opens. Tab cycles only between "Accept all" (a div announced as text, which Enter does not activate) and a close button with no accessible name, and Escape is not handled. A keyboard user cannot reach "Pricing" behind it.',
     fix: 'Make "Accept all", "Reject all" and "Manage" real <button> elements, give the close button aria-label="Close", close the banner on Escape, and do not trap focus (or include every action in the focus order and return focus afterwards).',
     verify: 'Using only Tab, Shift+Tab, Enter and Escape, a user can dismiss the banner and reach the "Pricing" link.',
     rec: { title: 'Let keyboard users dismiss the cookie banner', why: 'Right now it stops keyboard and screen-reader visitors before they reach any prices.' } },
-  { id: 'overflow', severity: 'major', title: 'Pricing scrolls sideways on phones', page: '/#pricing', preview: { target: 'pricing', scroll: 1 },
+  { id: 'overflow', principle: 'Tullis & Albert, Ch 5: medium severity, it contributes to failure and needs a workaround', severity: 'major', title: 'Pricing scrolls sideways on phones', page: '/#pricing', preview: { target: 'pricing', scroll: 1 },
     quotes: { mika: 'Scrolling for prices. Why is the page sliding sideways?' },
     element: 'div.pricing-plans',
     what: 'On a 393px-wide phone the row of pricing cards is wider than the screen and makes the whole page scroll sideways. Mika had to swipe back and forth to read the three prices.',
     fix: 'Below 640px, stack the plans vertically, or give the row overflow-x: auto so only the cards scroll.',
     verify: 'At iPhone 15 width the page has no sideways scroll and all three prices are readable by scrolling down.',
     rec: { title: 'Stack the pricing plans on small screens', why: 'Phone visitors can read every price without swiping sideways.' } },
-  { id: 'reject', severity: 'major', title: 'Cookie banner hides “Reject” behind a tiny link', page: '/', preview: { overlay: 'cookie', target: 'cookieReject' },
+  { id: 'reject', principle: 'Tullis & Albert, Ch 5: an issue is anything users miss or misread, here the reject choice goes unnoticed', severity: 'major', title: 'Cookie banner hides “Reject” behind a tiny link', page: '/', preview: { overlay: 'cookie', target: 'cookieReject' },
     quotes: { grace: 'No ‘Reject’ button. Only ‘Accept all’ and a faint ‘Manage’. Two screens deep just to say no.', mika: 'Tried the little ‘Manage’ link first. It’s so small I had to aim.' },
     element: 'button "Accept all" and link "Manage" in div.cookie-banner',
     what: 'The first banner screen offers a large "Accept all" button and a small "Manage" link measured at 18px tall. Declining optional cookies means opening Manage and switching categories off. Grace flagged the hidden decline; on a phone the link is under the 44px touch size.',
     fix: 'Add a "Reject all" button with the same size and style as "Accept all", side by side, each at least 44px tall.',
     verify: 'A user can reject optional cookies in one tap from the first banner screen.',
     rec: { title: 'Offer “Reject all” next to “Accept all”', why: 'Privacy-minded visitors can decline in one step and trust the site sooner.' } },
-  { id: 'faint', severity: 'major', title: 'Header and footer links are hard to read when enlarged', page: '/', preview: { target: 'navPricing' },
+  { id: 'faint', principle: 'Tullis & Albert, Ch 9: accessibility is usability for a particular set of users', severity: 'major', title: 'Header and footer links are hard to read when enlarged', page: '/', preview: { target: 'navPricing' },
     quotes: { lola: 'Small grey words up top. Is that ‘Product’ or ‘Pricing’? They look alike to me.' },
     element: 'header nav a, footer a (small light-grey text)',
     what: 'The header links are small grey text set close together, and the footer links are tiny light-grey text. At 200% enlargement Lola could not tell "Product" from "Pricing" and could not read the footer as a fallback route.',
     fix: 'Set nav and footer links to at least 16px in a darker colour, and give each link at least 8px of space around it.',
     verify: 'At 1280×800 with 200% zoom, a user can read every header and footer link, including "Pricing", on the first look.',
     rec: { title: 'Make navigation links larger and darker', why: 'Visitors who enlarge the page can find Pricing on the first look.' } },
-  { id: 'focus', severity: 'major', title: 'Header links hide the keyboard focus ring', page: '/', preview: { target: 'invisible', press: 'Tab' },
+  { id: 'focus', principle: 'Tullis & Albert, Ch 9: accessibility is usability for a particular set of users', severity: 'major', title: 'Header links hide the keyboard focus ring', page: '/', preview: { target: 'invisible', press: 'Tab' },
     quotes: { ava: 'I’m on ‘Product’, but there is no visible focus ring for anyone helping me.' },
     element: 'header nav a (outline: none)',
     what: 'The header nav links set outline: none with no replacement style, so focus becomes invisible after the logo. The executor observed no focus indicator on "Product".',
     fix: 'Remove outline: none and add a :focus-visible style: a 2px solid outline with a 2px offset.',
     verify: 'Every Tab stop in the header shows a visible focus ring.',
     rec: { title: 'Show where keyboard focus is', why: 'Keyboard visitors, and anyone helping them, can see where they are.' } },
-  { id: 'plans', severity: 'minor', title: 'Plan names don’t say what you get', page: '/#pricing', preview: { target: 'pricing', scroll: 1 },
+  { id: 'plans', principle: 'Tullis & Albert, Ch 5: an issue is anything that confuses users or makes them assume wrongly', severity: 'minor', title: 'Plan names don’t say what you get', page: '/#pricing', preview: { target: 'pricing', scroll: 1 },
     quotes: { lola: '‘Simple pricing.’ Free, Plus, Family. But what do I actually get for six dollars?', dev: '‘Plus’ and ‘Family’. Which one is for me? No feature list.', grace: 'Nothing says what Family adds.' },
     element: 'pricing cards "Free", "Plus", "Family"',
     what: 'Each pricing card shows only a plan name and a price. Visitors found the prices but could not tell what Plus or Family include, so they could not choose a plan.',
@@ -131,8 +131,8 @@ export function buildDemoReport(runId: string, req: RunRequest, ran: Ran[]): Rep
     const pageUrl = url + (i.page === '/' ? '/' : i.page)
     return {
       id: i.id, severity: i.severity, avatarIds, pageUrl, stepRefs: steps.map((s) => ({ avatarId: s.avatarId, n: s.n })),
-      screenshot: null, element: i.element, description: i.what, title: i.title, quotes: i.quotes, preview: i.preview,
-      fixPrompt: `Site: ${url}  Page: ${pageUrl}\nAffected users: ${names.join(', ')} (${join(avatarIds.map((id) => AV[id].group))} users)\nWhat happened: ${i.what}\nElement: ${i.element}\nPrinciple: UI/UX principles source pending\nFix: ${i.fix}\nVerify: ${i.verify}`,
+      screenshot: null, element: i.element, principle: i.principle, description: i.what, title: i.title, quotes: i.quotes, preview: i.preview,
+      fixPrompt: `Site: ${url}  Page: ${pageUrl}\nAffected users: ${names.join(', ')} (${join(avatarIds.map((id) => AV[id].group))} users)\nWhat happened: ${i.what}\nElement: ${i.element}\nPrinciple: ${i.principle}\nFix: ${i.fix}\nVerify: ${i.verify}`,
     }
   }).sort((a, b) => SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.avatarIds.length - a.avatarIds.length)
 
@@ -156,13 +156,13 @@ export function buildDemoReport(runId: string, req: RunRequest, ran: Ran[]): Rep
   ].filter(Boolean).join(' ')
 
   return {
-    runId, goal: req.goal, url: req.url, partial: stopped.length > 0, principlesSource: 'pending',
+    runId, goal: req.goal, url: req.url, partial: stopped.length > 0, principlesSource: 'loaded',
     overallScore, unableToRateReason: overallScore === null ? 'Every visitor was stopped before taking a step, so there is nothing to rate.' : undefined,
     assessment,
     avatarNotes: ran.map((r) => ({ avatarId: r.id, note: NOTES[r.id][r.status] ?? `${AV[r.id].name} was stopped after ${r.steps.length} ${r.steps.length === 1 ? 'step' : 'steps'}.` })),
     recommendations: issues.slice(0, 3).map((i) => {
       const d = ISSUES.find((x) => x.id === i.id)!
-      return { title: d.rec.title, why: d.rec.why, avatarIds: i.avatarIds, issueIds: [i.id] }
+      return { title: d.rec.title, why: d.rec.why, avatarIds: i.avatarIds, issueIds: [i.id], principle: d.principle }
     }),
     issues, succeeded, total: ran.length, medianSteps: mid, worstBlocker: worst?.title,
     avatars: ran.map((r) => ({ avatarId: r.id, status: r.status, steps: r.steps.length, seconds: r.seconds })),

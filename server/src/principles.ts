@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url'
 
 // Only these sections reach the report prompt; the skill's how-to, indexes and scope notes are navigation, not principles.
 const KEEP = /^## (Core Frameworks|Applying to Uxie)/
-const DEFAULT_PATH = fileURLToPath(new URL('../../.claude/skills/tullis-albert-ux-metrics/SKILL.md', import.meta.url))
+const DEFAULT_PATH = fileURLToPath(new URL('../../.agents/skills/tullis-albert-ux-metrics/SKILL.md', import.meta.url))
 
 // Pending when the file is missing, holds only headings/frontmatter (<300 chars of body), or is still marked TBD.
 export function loadPrinciples(path = DEFAULT_PATH): { source:'loaded'|'pending'; text:string } {

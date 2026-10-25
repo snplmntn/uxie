@@ -9,7 +9,7 @@ let browserPromise: Promise<Browser> | undefined
 
 export async function getBrowser(): Promise<Browser> {
   // Full Chromium build: the default headless shell leaves page videos black.
-  browserPromise ??= chromium.launch({ headless: true, channel: 'chromium' }).then(
+  browserPromise ??= chromium.launch({ headless: true, channel: 'chromium', args: ['--disable-dev-shm-usage'] }).then(
     b => { b.on('disconnected', () => { browserPromise = undefined }); return b },
     e => { browserPromise = undefined; throw e },
   )

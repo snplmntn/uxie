@@ -8,3 +8,9 @@ server/runs/
 
 # Copyrighted source books: never commit
 docs/*.pdf
+
+# Local Netlify folder
+.netlify
+
+# Local editor/agent settings
+.claude/
