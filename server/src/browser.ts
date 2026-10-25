@@ -43,7 +43,11 @@ export async function openAvatarPage(avatar:Avatar, url:string): Promise<{ conte
 
 export async function captureState(page:Page, avatar:Avatar, screenshotPath:string): Promise<PageState> {
   const b = avatar.browser
-  const shot = await page.screenshot({ path: screenshotPath, timeout: 20_000 })  // heavy third-party pages (Calendly) exceed the 5 s action timeout
+  let shot = await page.screenshot({ path: screenshotPath, timeout: 20_000 })  // heavy third-party pages (Calendly) exceed the 5 s action timeout
+  if (shot.length < 8_000) {  // a near-empty PNG is an unpainted frame, not the page; give the compositor a moment and retake once
+    await page.waitForTimeout(600)
+    shot = await page.screenshot({ path: screenshotPath, timeout: 20_000 })
+  }
   const state: PageState = { url: page.url(), title: await page.title(), snapshot: await page.locator('body').ariaSnapshot() }
   if (b.noScreenshot) state.pageText = (await page.locator('body').innerText()).slice(0, 4000)
   else state.screenshotB64 = shot.toString('base64')

@@ -32,6 +32,9 @@ export async function applyAction(page:Page, action:Action, avatar:Avatar): Prom
       await (avatar.browser.touch ? loc.tap() : loc.click())
     } else if (action.kind === 'scroll') {
       await page.mouse.wheel(0, action.direction === 'down' ? 600 : -600)
+      // Let the scroll settle and the compositor paint; an immediate capture at 2x DPR is a blank frame.
+      await page.evaluate(() => new Promise<void>(r => { let last = -1; const tick = () => { if (scrollY === last) return r(); last = scrollY; setTimeout(tick, 100) }; tick() })).catch(() => {})
+      await page.waitForTimeout(250)
     } else if (action.kind === 'press') {
       await (action.kind === 'press' && action.key === 'Alt+ArrowLeft' ? page.goBack({ waitUntil:'domcontentloaded' }).then(() => page.url() === 'about:blank' ? page.goForward({ waitUntil:'domcontentloaded' }) : null).catch(() => null) : page.keyboard.press(action.key))
     } else return result // done / give_up: nothing to do
