@@ -88,8 +88,10 @@ button{font:inherit;color:inherit}
 .tile-av{display:block;transition:transform .5s linear(0,.3 8%,.75 18%,1.06 30%,1.08 38%,1.02 52%,.99 66%,1)}
 .tile.on .tile-av{transform:scale(1.08)}
 .tile .nm{font-size:14px;font-weight:600;letter-spacing:-.01em}
-.tile .tg{font-size:12px;line-height:1.38;color:#6E6E73;min-height:33px}
-.tile .tg.chg{color:#1D1D1F}
+.tile .tg{font-size:12px;line-height:1.38;color:#6E6E73;min-height:33px;display:grid}
+.tile .tg>span{grid-area:1/1}
+.tile .tg>span:last-child,.tile .tg.chg>span:first-child{visibility:hidden}
+.tile .tg.chg>span:last-child{visibility:visible;color:#1D1D1F}
 .check{position:absolute;top:9px;right:9px;width:20px;height:20px;border-radius:50%;display:grid;place-items:center;color:#fff;transform:scale(0) rotate(-30deg);transition:transform .5s linear(0,.3 8%,.75 18%,1.06 30%,1.08 38%,1.02 52%,.99 66%,1)}
 .tile.on .check{transform:scale(1) rotate(0)}
 .auto{margin-top:18px}
@@ -133,6 +135,10 @@ button{font:inherit;color:inherit}
 .rc-name{font-weight:600;font-size:15px;letter-spacing:-.01em}
 .rc-cfg{font-size:12px;color:#6E6E73;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .frame{border-radius:14px;overflow:hidden;border:1px solid #EDEDF0;background:#fff}
+.boot{aspect-ratio:16/10;display:grid;place-items:center;background:#F5F5F7}
+.boot span{font-size:13px;color:#86868B}
+.boot i{width:28px;height:28px;border-radius:50%;border:3px solid #E5E5EA;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .chrome{height:28px;display:flex;align-items:center;gap:6px;padding:0 10px;background:#F7F7F8;border-bottom:1px solid #EFEFF1}
 .chrome i{width:8px;height:8px;border-radius:50%;background:#DCDCE0;display:block;flex:none}
 .chrome .url{margin-left:6px;font-size:11px;color:#6E6E73;background:#fff;border-radius:6px;padding:2px 9px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
@@ -195,6 +201,8 @@ button{font:inherit;color:inherit}
 /* report: one column, overview first, then one visitor at a time */
 .r-head{margin-bottom:24px}
 .eyebrow{display:flex;align-items:center;gap:8px;font-size:13px;color:#6E6E73;font-weight:500}
+.fav.logo{background:#fff;box-shadow:0 0 0 1px rgba(0,0,0,.08);overflow:hidden}
+.fav img{width:100%;height:100%;object-fit:contain;display:block}
 .eyebrow .fav{width:20px;height:20px;font-size:11px}
 .r-h1{font-size:clamp(32px,4.6vw,50px);letter-spacing:-.04em;line-height:1.04;font-weight:650;margin:10px 0 0}
 .r-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:18px}
@@ -204,6 +212,8 @@ button{font:inherit;color:inherit}
 .score-ring svg{display:block;transform:rotate(-90deg)}
 .ring-t{position:absolute;inset:0;display:grid;place-items:center;font-size:18px;font-weight:650;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .ov-title{font-size:18px;font-weight:650;letter-spacing:-.02em}
+.praise{font-size:clamp(22px,2.6vw,28px);font-weight:650;letter-spacing:-.03em;line-height:1.15;margin-bottom:6px}
+.praise.ok{color:#067647}.praise.warn{color:#B54708}.praise.bad{color:#B42318}
 .ov-sub{font-size:14px;color:#6E6E73;margin-top:3px;line-height:1.5}
 .ov-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-top:22px}
 @media (max-width:640px){.ov-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
@@ -240,7 +250,33 @@ button{font:inherit;color:inherit}
 .ag-who{font-size:14px;color:#6E6E73;margin-top:2px}
 .ag-meta{font-size:13px;color:#6E6E73;margin-top:16px;font-variant-numeric:tabular-nums}
 .ag-chg{display:inline-flex;margin-top:10px;font-size:13px;padding:7px 12px;border-radius:12px;font-weight:600}
+.replay{display:block;width:100%;max-height:70vh;border-radius:14px;border:1px solid #EDEDF0;background:#F5F5F7}
 .sub-h{font-size:13px;font-weight:600;color:#6E6E73;margin:28px 0 8px;display:flex;align-items:center;gap:8px}
+.fold summary{cursor:pointer;list-style:none;width:max-content}
+.fold summary::-webkit-details-marker{display:none}
+.fold summary svg{transition:transform .2s}
+.fold[open] summary svg{transform:rotate(90deg)}
+/* Phone screenshots sit in a phone, centered, instead of stretching across a desktop-shaped frame. */
+.phone-stage{background:#F5F5F7;display:flex;justify-content:center;aspect-ratio:16/10;padding:14px 0}
+.phone-stage.full{aspect-ratio:auto;height:62vh;padding:20px 0}
+.phone{height:100%;aspect-ratio:393/852;background:#111;border-radius:22px;padding:5px;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+.phone-stage.full .phone{border-radius:34px;padding:7px}
+.phone .shot-btn,.phone>img,.phone .boot{height:100%;aspect-ratio:auto}
+.phone .shot-btn img,.phone>img{display:block;width:100%;height:100%;object-fit:cover;object-position:top;border-radius:17px;background:#fff}
+.phone-stage.full .phone .shot-btn img{border-radius:27px}
+.shot-btn{display:block;width:100%;padding:0;border:0;background:none;cursor:zoom-in}
+/* Preflight zeroes dialog margins, which pins it top-left; margin:auto re-centres it. */
+.lightbox{margin:auto;padding:0;border:0;background:transparent;max-width:none;max-height:none;overflow:visible}
+.lightbox[open]{animation:lbIn .24s cubic-bezier(.2,.8,.2,1)}
+.lightbox[open]::backdrop{background:rgba(20,20,26,.72);backdrop-filter:blur(4px);animation:lbFade .24s ease-out}
+.lightbox img{display:block;width:auto;height:auto;aspect-ratio:auto;max-width:min(92vw,1280px);max-height:88vh;object-fit:contain;border-radius:14px;background:#fff;box-shadow:0 24px 60px rgba(0,0,0,.35)}
+@keyframes lbIn{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:none}}
+@keyframes lbFade{from{opacity:0}to{opacity:1}}
+@media (prefers-reduced-motion:reduce){.lightbox[open],.lightbox[open]::backdrop{animation:none}}
+.lb-x{position:absolute;top:-44px;right:0;width:36px;height:36px;border-radius:50%;border:0;background:rgba(255,255,255,.18);color:#fff;display:grid;place-items:center;cursor:pointer}
+.log-shot{display:block;margin-top:8px;max-width:200px;border-radius:10px;overflow:hidden;border:1px solid #EDEDF0;background:#F5F5F7}
+.log-shot .shot-btn img{display:block;width:100%;aspect-ratio:16/10;object-fit:contain}
+.log-shot .boot{aspect-ratio:16/10}
 .tl .log-item{padding:9px 0;position:relative}
 .tl .log-item:not(:last-child)::before{content:"";position:absolute;left:12.5px;top:38px;bottom:-9px;width:1px;background:#E5E5EA}
 .iss{border:1px solid #EDEDF0;border-radius:20px;margin-bottom:10px;overflow:hidden;transition:box-shadow .3s}
@@ -316,7 +352,7 @@ button{font:inherit;color:inherit}
 @keyframes stSpin{to{transform:rotate(360deg)}}
 @keyframes stTap{0%{transform:scale(.4);opacity:.5}100%{transform:scale(1.6);opacity:0}}
 @media (prefers-reduced-motion:reduce){
-.av-eyes,.av-look,.av-bob,.av-cheer,.av-droop,.cl-av,.hop,.pulse,.shimmer,.caret,.bdg,.autobar i{animation:none !important}
+.av-eyes,.av-look,.av-bob,.av-cheer,.av-droop,.cl-av,.hop,.pulse,.shimmer,.caret,.bdg,.autobar i,.boot i{animation:none !important}
 .shimmer{color:#6E6E73;background:none}
 .tile,.tile-av,.rcard,.check,.chev,.progress i,.go{transition:none !important}
 }
@@ -325,5 +361,3 @@ button{font:inherit;color:inherit}
 /* sliding tab pill (motion layoutId) */
 .tab.on{background:transparent;box-shadow:none}
 .tab-pill{position:absolute;inset:0;border-radius:999px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.08),0 6px 16px rgba(0,0,0,.06);z-index:-1}
-.demo-pill{color:#6E6E73;font-weight:500}
-@media (max-width:600px){.demo-pill{display:none}}

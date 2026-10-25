@@ -6,7 +6,7 @@ import { AV, ORDER } from '@/lib/avatars'
 import { DEMO_URL, GOALS } from '@/lib/demo'
 import type { AvatarId, RunRequest } from '@/lib/types'
 import { Avatar } from './Avatar'
-import { EASE, EASE_IN, LAND, favLetter, hostOf, isValidUrl, join, lowerFirst } from './ui'
+import { EASE, EASE_IN, Fav, LAND, hostOf, isValidUrl, join, lowerFirst, normalizeUrl } from './ui'
 
 const CHECK = <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg>
 const HEADLINE = [['See', 'your', 'site', 'through'], ['five', 'other', 'pairs', 'of', 'eyes.']]
@@ -55,7 +55,7 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
     setSel((s) => ORDER.filter((x) => (x === id ? !s.includes(id) : s.includes(x))))
     setAuto((a) => ({ seq: a.seq + 1, dur: 1.8 }))
   }
-  const run = () => { if (valid && sel.length) onRun({ url: url.trim(), goal: goalNow, avatarIds: sel }) }
+  const run = () => { if (valid && sel.length) onRun({ url: normalizeUrl(url), goal: goalNow, avatarIds: sel }) }
 
   const rise = reduce
     ? { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 }, transition: { duration: 0.2 } }
@@ -110,7 +110,7 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
                 <label className="sr" htmlFor="uxie-url">Website address to test</label>
                 <input
                   id="uxie-url" className="url-in" type="url" inputMode="url" autoComplete="url" spellCheck={false} autoFocus
-                  placeholder="Paste a URL to test, like https://yoursite.com" value={url} aria-invalid={showErr} aria-describedby={showErr ? 'uxie-url-err' : undefined}
+                  placeholder="Paste a URL to test, like yoursite.com" value={url} aria-invalid={showErr} aria-describedby={showErr ? 'uxie-url-err' : undefined}
                   onChange={(e) => {
                     const v = e.target.value, ok = isValidUrl(v)
                     setUrl(v); setTouched((t) => t && !ok)
@@ -124,11 +124,11 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
                 <button className="send" type="button" disabled={!valid} onClick={submitUrl} aria-label="Continue"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5L12 5l6.5 6.5" /></svg></button>
               </div>
               {showErr && (
-                <div className="err-msg" role="alert" id="uxie-url-err"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17zM12 8v5M12 16v.2" /></svg>That doesn’t look like a public web address. Start it with http:// or https://</div>
+                <div className="err-msg" role="alert" id="uxie-url-err"><svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 3.5a8.5 8.5 0 1 0 0 17a8.5 8.5 0 1 0 0-17zM12 8v5M12 16v.2" /></svg>That doesn’t look like a public web address. Try something like yoursite.com</div>
               )}
             </motion.div>
           ) : (
-            <DoneRow key="d0" label="Site" value={host} onChange={() => goStep(0)} motionProps={settle} layout={!reduce}><span className="fav" aria-hidden="true">{favLetter(host)}</span></DoneRow>
+            <DoneRow key="d0" label="Site" value={host} onChange={() => goStep(0)} motionProps={settle} layout={!reduce}><Fav url={url} /></DoneRow>
           )}
 
           {step === 1 && (
@@ -149,7 +149,8 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
                       <span className="check" style={{ background: a.ink }} aria-hidden="true"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12.5l4.5 4.5L19 7.5" /></svg></span>
                       <span className="tile-av"><Avatar id={id} mood={on ? 'happy' : 'idle'} size={62} /></span>
                       <span className="nm">{a.name}</span>
-                      <span className={`tg ${hov ? 'chg' : ''}`}>{hov ? a.changes : a.tag}</span>
+                      {/* Both texts share one cell so the tile is sized for the longer one and never jumps on hover. */}
+                      <span className={`tg ${hov ? 'chg' : ''}`}><span>{a.tag}</span><span>{a.changes}</span></span>
                     </motion.button>
                   )
                 })}
@@ -178,11 +179,11 @@ export function Launch({ initial, startStep, onRun }: { initial: RunRequest; sta
               <p className="q-sub">Pick one or describe it. Visitors only browse and read: no typing, sign-ups or purchases.</p>
               <div className="chips">
                 {GOALS.map((c, i) => (
-                  <motion.button key={c} type="button" className={`chip ${goal === c ? 'on' : ''}`} aria-pressed={goal === c} onClick={() => setGoal(c)} {...item(i, 0.22, 0.035)}>{c}</motion.button>
+                  <motion.button key={c} type="button" className={`chip ${goalNow === c ? 'on' : ''}`} aria-pressed={goalNow === c} onClick={() => setGoal(c)} {...item(i, 0.22, 0.035)}>{c}</motion.button>
                 ))}
               </div>
               <label className="sr" htmlFor="uxie-goal">Goal in your own words</label>
-              <input id="uxie-goal" className="goal-in" type="text" placeholder="Or describe the goal in your own words" value={goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); run() } }} />
+              <input id="uxie-goal" className="goal-in" type="text" placeholder="Or write your own, e.g. Find the shipping cost to Canada" value={GOALS.includes(goal) ? '' : goal} onChange={(e) => setGoal(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); run() } }} />
               <div className="goal-bar">
                 <div className="stack" aria-hidden="true">
                   {sel.map((id) => <motion.span key={id} layoutId={`av-${id}`} className="st-av"><Avatar id={id} mood="happy" size={30} /></motion.span>)}

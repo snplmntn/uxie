@@ -1,4 +1,6 @@
+import { useRef, useState } from 'react'
 import type { Mood } from '@/lib/avatars'
+import { DEMO_URL } from '@/lib/demo'
 import type { AvatarStatus, Severity } from '@/lib/types'
 
 export const ICON = {
@@ -43,10 +45,49 @@ export function SevPill({ sev }: { sev: Severity }) {
 export const join = (a: string[]) => (a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1])
 export const mmss = (sec: number) => Math.floor(sec / 60) + ':' + String(Math.floor(sec % 60)).padStart(2, '0')
 export const lowerFirst = (t: string) => (t ? t.charAt(0).toLowerCase() + t.slice(1) : t)
-// Public http(s) address with a dotted host; localhost and bare words are rejected, as the spec asks.
-export const isValidUrl = (u: string) => /^https?:\/\/[^\s/$.?#][^\s]*\.[a-z]{2,}(\/[^\s]*)?$/i.test((u || '').trim())
-export const hostOf = (u: string) => { try { return new URL(u.trim()).host || u.trim() } catch { return u.trim() } }
+// A bare domain like "site.com/pricing" gets https:// added.
+export const normalizeUrl = (u: string) => { const t = (u || '').trim(); return t && !/^[a-z][a-z\d+.-]*:\/\//i.test(t) ? 'https://' + t : t }
+// Public http(s) address with a real dotted domain; localhost, IPs and bare words are rejected, as the spec asks.
+export const isValidUrl = (u: string) => {
+  try {
+    const x = new URL(normalizeUrl(u))
+    return (x.protocol === 'http:' || x.protocol === 'https:') && /^(?:[a-z\d](?:[a-z\d-]{0,61}[a-z\d])?\.)+(?:[a-z]{2,63}|xn--[a-z\d-]{1,59})$/i.test(x.hostname)
+  } catch { return false }
+}
+export const hostOf = (u: string) => { try { return new URL(normalizeUrl(u)).host || u.trim() } catch { return u.trim() } }
 export const favLetter = (host: string) => (host.replace(/^www\./, '').charAt(0) || 'U').toUpperCase()
+const API = process.env.NEXT_PUBLIC_UXIE_API?.replace(/\/+$/, '')
+// A real run's screenshot; a quiet note instead of the browser's broken-image icon if it fails to load.
+// zoom: click to view full size in a native modal dialog (Esc, focus trap and backdrop come free).
+export function Shot({ src, alt, style, zoom }: { src: string; alt: string; style?: React.CSSProperties; zoom?: boolean }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const dlg = useRef<HTMLDialogElement>(null)
+  if (failed === src) return <div className="boot" style={{ maxHeight: style?.maxHeight }}><span>Screenshot unavailable</span></div>
+  const img = <img src={src} alt={alt} style={style} onError={() => setFailed(src)} />
+  if (!zoom) return img
+  const close = () => dlg.current?.close()
+  return (
+    <>
+      <button type="button" className="shot-btn" onClick={() => dlg.current?.showModal()} aria-label={`Enlarge: ${alt}`}>{img}</button>
+      {/* Esc closes only this dialog, not a panel listening on window behind it. */}
+      <dialog ref={dlg} className="lightbox" aria-label={alt} onClick={(e) => e.target === e.currentTarget && close()} onKeyDown={(e) => e.key === 'Escape' && e.stopPropagation()}>
+        <img src={src} alt={alt} />
+        <button type="button" className="lb-x" onClick={close} aria-label="Close"><Ico d={ICON.x} size={18} sw={2.2} /></button>
+      </dialog>
+    </>
+  )
+}
+// The site's own logo via the backend; the letter badge when there is no backend, for the demo site, or if it fails.
+export function Fav({ url }: { url: string }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const site = normalizeUrl(url)
+  const src = API && site && site !== DEMO_URL && failed !== site ? `${API}/favicon?url=${encodeURIComponent(site)}` : null
+  return (
+    <span className={`fav ${src ? 'logo' : ''}`} aria-hidden="true">
+      {src ? <img src={src} alt="" onError={() => setFailed(site)} /> : favLetter(hostOf(url))}
+    </span>
+  )
+}
 
 export const EASE = [0.32, 0.72, 0, 1] as const
 export const LAND = [0.34, 1.4, 0.64, 1] as const

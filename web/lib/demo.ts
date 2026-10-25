@@ -2,7 +2,7 @@ import { AV, ORDER } from './avatars'
 import type { AvatarId, AvatarStatus, Friction, Issue, Preview, Report, RunClient, RunEvent, RunRequest, Severity, Step } from './types'
 
 export const DEMO_URL = 'https://brightside.app'
-export const GOALS = ['Find the pricing', 'Understand what this product does', 'Find how to contact support', 'Find the sign-up page', 'Find the privacy policy']
+export const GOALS = ['Understand what this product does', 'Find the pricing', 'Find how to get in touch', 'Find the return or refund policy', 'Get an answer from the FAQ or help pages', 'Find out who’s behind this']
 
 // Scripted run against the made-up "Brightside" site for the goal "Find the pricing".
 // Actions stay inside the spec's registry: click/tap, scroll, key presses, done, give up. No typing, no forms.
@@ -171,7 +171,6 @@ export function buildDemoReport(runId: string, req: RunRequest, ran: Ran[]): Rep
 
 // Replays SCRIPT over time with the same events the backend streams over SSE.
 export function createMockClient(): RunClient {
-  let speed = 1
   const runs = new Map<string, { stop: () => void; listeners: Set<(e: RunEvent) => void>; timers: ReturnType<typeof setTimeout>[] }>()
 
   return {
@@ -201,10 +200,10 @@ export function createMockClient(): RunClient {
           maybeReport(); return
         }
         const d = script.steps[n]
-        const s: Step = { avatarId: a.id, n: n + 1, url: DEMO_URL + '/', title: 'Brightside', label: d.label, narration: d.narration, preview: d.preview, screenshot: null, friction: d.friction ? [d.friction] : [], at: new Date().toISOString() }
+        const s: Step = { avatarId: a.id, n: n + 1, url: DEMO_URL + '/', title: 'Brightside', label: d.label, narration: d.narration, preview: d.preview ?? {}, screenshot: null, friction: d.friction ? [d.friction] : [], at: new Date().toISOString() }
         a.steps.push(s)
         emit({ type: 'step', step: s })
-        timers.push(setTimeout(() => advance(i, n + 1), ((900 + d.narration.length * 22) * AV[a.id].pace) / speed))
+        timers.push(setTimeout(() => advance(i, n + 1), ((900 + d.narration.length * 22) * AV[a.id].pace)))
       }
 
       runs.set(runId, {
@@ -235,6 +234,5 @@ export function createMockClient(): RunClient {
       }
     },
     async stop(runId) { runs.get(runId)?.stop() },
-    setSpeed(s) { speed = s },
   }
 }

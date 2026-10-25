@@ -33,11 +33,12 @@ export type Report = {
   overallScore: number | null; unableToRateReason?: string; assessment: string
   avatarNotes: AvatarNote[]; recommendations: Recommendation[]; issues: Issue[]
   succeeded: number; total: number; medianSteps: number; worstBlocker?: string
-  avatars: { avatarId: AvatarId; status: AvatarStatus; steps: number; seconds: number }[]
+  avatars: { avatarId: AvatarId; status: AvatarStatus; steps: number; seconds: number; video?: string }[]
 }
 export type RunEvent =
   | { type: 'step'; step: Step }
   | { type: 'avatar_status'; avatarId: AvatarId; status: AvatarStatus; reason?: string }
+  | { type: 'frame'; avatarId: AvatarId; n: number; url: string; screenshot: string }
   | { type: 'run_status'; status: RunStatus }
   | { type: 'report'; report: Report }
 export type RunRequest = { url: string; goal: string; avatarIds: AvatarId[] }
@@ -46,5 +47,4 @@ export interface RunClient {
   start(req: RunRequest): Promise<{ runId: string }>
   events(runId: string, on: (e: RunEvent) => void): () => void
   stop(runId: string): Promise<void>
-  setSpeed?(speed: number): void
 }

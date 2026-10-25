@@ -9,7 +9,7 @@ import type { Report as ReportT, RunClient, RunEvent, RunRequest } from '@/lib/t
 import { Launch } from './Launch'
 import { Report, Compiling } from './Report'
 import { RunScreen, type AvatarRun } from './RunScreen'
-import { EASE, EASE_IN, favLetter, hostOf, isLive, mmss } from './ui'
+import { EASE, EASE_IN, Fav, hostOf, isLive, mmss } from './ui'
 
 type Screen = 'launch' | 'run' | 'compiling' | 'report'
 
@@ -17,6 +17,19 @@ const API = process.env.NEXT_PUBLIC_UXIE_API
 const mock = createMockClient()
 // The scripted demo runs whenever there is no backend, and always for the made-up demo site.
 const clientFor = (url: string): RunClient => (API && url !== DEMO_URL ? createHttpClient(API) : mock)
+
+// Ticks on each whole second since t0 and re-renders only itself, not the run screen.
+function Timer({ t0, endAt }: { t0: number; endAt: number }) {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (endAt) return
+    let id: ReturnType<typeof setTimeout>
+    const tick = () => { const n = Date.now(); setNow(n); id = setTimeout(tick, 1000 - ((n - t0) % 1000) + 5) }
+    tick()
+    return () => clearTimeout(id)
+  }, [t0, endAt])
+  return <span className="timer" aria-label="Elapsed time">{mmss(Math.max(0, (endAt || now) - t0) / 1000)}</span>
+}
 
 export function Uxie() {
   const reduce = useReducedMotion()
@@ -27,8 +40,6 @@ export function Uxie() {
   const [report, setReport] = useState<ReportT | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [t0, setT0] = useState(0)
-  const [now, setNow] = useState(0)
-  const [speed, setSpeed] = useState(1)
   const run = useRef<{ client: RunClient; id: string | null; unsub?: () => void } | null>(null)
   const compAt = useRef(0)
 
@@ -38,6 +49,7 @@ export function Uxie() {
   const onEvent = useCallback((e: RunEvent) => {
     const at = Date.now()
     if (e.type === 'step') setRuns((rs) => rs.map((r) => (r.id === e.step.avatarId ? { ...r, status: 'running', steps: [...r.steps.filter((s) => s.n !== e.step.n), e.step] } : r)))
+    if (e.type === 'frame') setRuns((rs) => rs.map((r) => (r.id === e.avatarId ? { ...r, frame: { n: e.n, url: e.url, screenshot: e.screenshot } } : r)))
     if (e.type === 'avatar_status') setRuns((rs) => rs.map((r) => (r.id === e.avatarId ? { ...r, status: e.status, endedAt: isLive(e.status) ? undefined : at } : r)))
     if (e.type === 'report') setReport(e.report)
   }, [])
@@ -46,9 +58,8 @@ export function Uxie() {
     detach()
     const client = clientFor(r.url)
     const at = Date.now()
-    setReq(r); setReport(null); setError(null); setT0(at); setNow(at)
+    setReq(r); setReport(null); setError(null); setT0(at)
     setRuns(r.avatarIds.map((id) => ({ id, status: 'queued', steps: [], startedAt: at })))
-    client.setSpeed?.(speed)
     setScreen('run')
     const me = { client, id: null as string | null, unsub: undefined as undefined | (() => void) }
     run.current = me
@@ -64,11 +75,6 @@ export function Uxie() {
   const allDone = runs.length > 0 && runs.every((r) => !isLive(r.status))
   const endAt = allDone ? Math.max(...runs.map((r) => r.endedAt ?? 0)) : 0
 
-  useEffect(() => {
-    if (screen !== 'run' || allDone) return
-    const iv = setInterval(() => setNow(Date.now()), 250)
-    return () => clearInterval(iv)
-  }, [screen, allDone])
   // Everyone finished: a beat to cheer or droop, then compile, then the report once it arrives.
   useEffect(() => {
     if (screen !== 'run' || !allDone) return
@@ -83,7 +89,6 @@ export function Uxie() {
 
   const host = hostOf(req.url)
   const finished = runs.filter((r) => !isLive(r.status)).length
-  const elapsed = Math.max(0, (endAt || now) - t0) / 1000
   const isDemo = clientFor(req.url) === mock
 
   const fx = reduce
@@ -97,18 +102,18 @@ export function Uxie() {
           <span className="mark" aria-hidden="true"><i style={{ background: '#C084FC' }} /><i style={{ background: '#F472B6' }} /><i style={{ background: '#38BDF8' }} /><i style={{ background: '#FBBF24' }} /></span>
           <span>Uxie</span>
         </button>
-        {screen !== 'launch' && (
-          <div className="target"><span className="fav" aria-hidden="true">{favLetter(host)}</span><span className="t-host">{host}</span><span className="t-sep" aria-hidden="true" /><span className="t-goal">{req.goal}</span></div>
+        {/* The report header already names the site and goal. */}
+        {screen !== 'launch' && screen !== 'report' && (
+          <div className="target"><Fav url={req.url} /><span className="t-host">{host}</span><span className="t-sep" aria-hidden="true" /><span className="t-goal">{req.goal}</span></div>
         )}
         <div className="bar-r">
-          {isDemo && screen !== 'launch' && <span className="pill-run demo-pill" title="No backend connected: this replays a scripted run">Scripted demo</span>}
           {screen === 'run' && (
             <>
-              <span className="timer" aria-label="Elapsed time">{mmss(elapsed)}</span>
+              <Timer t0={t0} endAt={endAt} />
               <span className="pill-run" role="status">{!allDone && <i className="pulse" style={{ color: '#0071E3' }} />}{allDone ? 'All finished' : `${finished} of ${runs.length} finished`}</span>
             </>
           )}
-          {screen === 'report' && <button className="btn sm dark" type="button" onClick={home}>New test</button>}
+          {screen === 'report' && <button className="btn sm dark" type="button" onClick={home}>Test another site</button>}
         </div>
       </header>
 
@@ -119,8 +124,7 @@ export function Uxie() {
           <motion.main key={screen} {...fx}>
             {screen === 'launch' && <Launch initial={req} startStep={launchStep} onRun={start} />}
             {screen === 'run' && (
-              <RunScreen runs={runs} goal={req.goal} speed={speed} demo={isDemo} onStop={stop}
-                onSpeed={() => { const s = speed === 1 ? 3 : 1; setSpeed(s); run.current?.client.setSpeed?.(s) }} />
+              <RunScreen runs={runs} goal={req.goal} onStop={stop} />
             )}
             {screen === 'compiling' && <Compiling runs={runs} />}
             {screen === 'report' && report && <Report req={req} runs={runs} report={report} onRunAgain={() => start(req)} onHome={home} />}

@@ -14,11 +14,17 @@ export function createHttpClient(base: string): RunClient {
       const es = new EventSource(`${api}/runs/${runId}/events`)
       const handle = (m: MessageEvent) => {
         const e = { type: (m as MessageEvent & { type: string }).type, ...JSON.parse(m.data) } as RunEvent
-        // Screenshot paths are relative to the backend.
-        if (e.type === 'step' && e.step.screenshot?.startsWith('/')) e.step.screenshot = api + e.step.screenshot
+        // Screenshot and video paths are relative to the backend.
+        const abs = (p?: string | null) => (p?.startsWith('/') ? api + p : p)
+        if (e.type === 'step') e.step.screenshot = abs(e.step.screenshot) ?? null
+        if (e.type === 'frame') e.screenshot = abs(e.screenshot) ?? e.screenshot
+        if (e.type === 'report') {
+          e.report.issues.forEach((i) => { i.screenshot = abs(i.screenshot) ?? null })
+          e.report.avatars.forEach((x) => { x.video = abs(x.video) ?? undefined })
+        }
         on(e)
       }
-      for (const t of ['step', 'avatar_status', 'run_status', 'report']) es.addEventListener(t, handle)
+      for (const t of ['step', 'frame', 'avatar_status', 'run_status', 'report']) es.addEventListener(t, handle)
       return () => es.close()
     },
     async stop(runId) { await fetch(`${api}/runs/${runId}/stop`, { method: 'POST' }) },

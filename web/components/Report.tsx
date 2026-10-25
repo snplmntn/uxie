@@ -3,11 +3,11 @@
 import { AnimatePresence, animate, motion, useReducedMotion } from 'motion/react'
 import { useEffect, useRef, useState } from 'react'
 import { AV } from '@/lib/avatars'
-import type { AvatarId, Issue, Report as ReportT, RunRequest } from '@/lib/types'
+import type { AvatarId, AvatarStatus, Issue, Report as ReportT, RunRequest } from '@/lib/types'
 import { Avatar } from './Avatar'
 import { StepLog, type AvatarRun } from './RunScreen'
 import { Site } from './Site'
-import { EASE, ICON, Ico, SevPill, favLetter, hostOf, join, mmss, statusOf } from './ui'
+import { EASE, Fav, ICON, Ico, SevPill, Shot, hostOf, join, mmss, statusOf } from './ui'
 
 export function Compiling({ runs }: { runs: AvatarRun[] }) {
   const reduce = useReducedMotion()
@@ -86,13 +86,17 @@ function IssueCard({ it, me, open, onToggle, copied, copy }: { it: Issue; me: Av
             transition={{ duration: reduce ? 0.15 : 0.45, ease: EASE }}
           >
             <div className="iss-b">
-              <div className="frame">
-                <div className="chrome"><i /><i /><i /><span className="url">{it.pageUrl.replace(/^https?:\/\//, '')}</span><span className="cfg">{a.cfg}</span></div>
-                {it.screenshot
-                  ? <img src={it.screenshot} alt={`${a.name}’s view when it happened`} style={{ display: 'block', width: '100%' }} />
-                  : <Site variant={a.variant} accent={a.ink} {...it.preview} cursor={false} />}
-              </div>
-              <div className="shot-cap">{a.name}’s view when it happened · {a.cfg}{it.element ? ` · ${it.element}` : ''}</div>
+              {(it.screenshot || it.preview) && <>
+                <div className="frame">
+                  <div className="chrome"><i /><i /><i /><span className="url">{it.pageUrl.replace(/^https?:\/\//, '')}</span><span className="cfg">{a.cfg}</span></div>
+                  {it.screenshot && a.variant === 'mobile'
+                    ? <div className="phone-stage"><div className="phone"><Shot src={it.screenshot} alt={`${a.name}’s view when it happened`} zoom /></div></div>
+                    : it.screenshot
+                    ? <Shot src={it.screenshot} alt={`${a.name}’s view when it happened`} style={{ display: 'block', width: '100%', maxHeight: 360, objectFit: 'contain', background: '#F5F5F7' }} zoom />
+                    : <Site variant={a.variant} accent={a.ink} {...it.preview} cursor={false} />}
+                </div>
+                <div className="shot-cap">{a.name}’s view when it happened · {a.cfg}{it.element ? ` · ${it.element}` : ''}</div>
+              </>}
               <div className="prompt">
                 <div className="prompt-h">
                   <span>Fix prompt · paste into Codex or Claude Code</span>
@@ -110,7 +114,12 @@ function IssueCard({ it, me, open, onToggle, copied, copy }: { it: Issue; me: Av
   )
 }
 
-export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequest; runs: AvatarRun[]; report: ReportT; onRunAgain: () => void; onHome: () => void }) {
+// Who to show first: those who finished, then those who tried, then those who never got in.
+const RANK: Partial<Record<AvatarStatus, number>> = { done: 0, unverified: 1, gave_up: 2, stopped: 3 }
+const rank = (r: AvatarRun) => (r.steps.length ? RANK[r.status] ?? 4 : 5)
+
+export function Report({ req, runs: given, report, onRunAgain, onHome }: { req: RunRequest; runs: AvatarRun[]; report: ReportT; onRunAgain: () => void; onHome: () => void }) {
+  const runs = [...given].sort((x, y) => rank(x) - rank(y))
   const reduce = useReducedMotion()
   const ids = runs.map((r) => r.id)
   const [tab, setTab] = useState<AvatarId>(ids[0])
@@ -124,6 +133,15 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
   const score = report.overallScore
   const count = (s: Issue['severity']) => report.issues.filter((i) => i.severity === s).length
   const issueById = (id: string) => report.issues.find((i) => i.id === id)
+
+  // A word of praise (or encouragement) to match the score.
+  const tier = score === null ? null
+    : score >= 9 ? { cls: 'ok', ink: '#12B76A', label: 'Excellent', line: 'Great job! Visitors got through without a hitch.' }
+    : score >= 7 ? { cls: 'ok', ink: '#12B76A', label: 'Good', line: 'Nice work. A few rough edges, nothing that stops people.' }
+    : score >= 5 ? { cls: 'warn', ink: '#F79009', label: 'Fair', line: 'Getting there. Fix the issues below and this climbs fast.' }
+    : score >= 3 ? { cls: 'bad', ink: '#F04438', label: 'Needs work', line: 'Some visitors struggled. The fixes below will help most.' }
+    : { cls: 'bad', ink: '#F04438', label: 'Poor', line: 'Visitors are getting stuck. Start with the blockers below.' }
+  const untried = (['lola', 'ava', 'grace'] as AvatarId[]).filter((id) => !ids.includes(id)).map((id) => AV[id].name)
 
   let headline = `${reached} of ${n} visitors made it.`
   if (n === 1) headline = AV[ids[0]].name + (reached ? ' made it.' : ' didn’t make it.')
@@ -169,13 +187,14 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
   const st = statusOf(r.status), a = AV[r.id], idx = ids.indexOf(r.id)
   const mine = report.issues.filter((i) => i.avatarIds.includes(r.id))
   const prev = idx > 0 ? ids[idx - 1] : null, next = idx < ids.length - 1 ? ids[idx + 1] : null
-  const secs = report.avatars.find((x) => x.avatarId === r.id)?.seconds ?? 0
+  const stat = report.avatars.find((x) => x.avatarId === r.id)
+  const secs = stat?.seconds ?? 0
   const note = report.avatarNotes.find((x) => x.avatarId === r.id)?.note
 
   return (
     <div className="wrap narrow">
       <motion.div className="r-head" {...enter(0)}>
-        <div className="eyebrow"><span className="fav" aria-hidden="true">{favLetter(host)}</span>{host} · Preflight report</div>
+        <div className="eyebrow"><Fav url={req.url} />{host} · Preflight report</div>
         <h1 className="r-h1">{headline}</h1>
         <p className="sub-run">Goal: <b>{req.goal}</b></p>
         <div className="r-actions">
@@ -189,13 +208,14 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
           <div className="score-ring" role="img" aria-label={score === null ? 'Unable to rate' : `Usability score ${score} out of 10`}>
             <svg viewBox="0 0 76 76" width="76" height="76" aria-hidden="true">
               <circle cx="38" cy="38" r="31" fill="none" stroke="#F0F0F2" strokeWidth="8" />
-              <motion.circle cx="38" cy="38" r="31" fill="none" stroke="#1D1D1F" strokeWidth="8" strokeLinecap="round" strokeDasharray={RING}
+              <motion.circle cx="38" cy="38" r="31" fill="none" stroke={tier?.ink ?? '#1D1D1F'} strokeWidth="8" strokeLinecap="round" strokeDasharray={RING}
                 initial={{ strokeDashoffset: reduce ? RING * (1 - (score ?? 0) / 10) : RING }} animate={{ strokeDashoffset: RING * (1 - (score ?? 0) / 10) }} transition={{ duration: 1.4, ease: EASE, delay: 0.35 }} />
             </svg>
             <span className="ring-t">{score === null ? '–' : <span><CountUp value={score} delay={0.35} />/10</span>}</span>
           </div>
           <div style={{ minWidth: 0 }}>
-            <div className="ov-title">{score === null ? 'Unable to rate' : `Usability score: ${score} out of 10`}</div>
+            {tier && <div className={`praise ${tier.cls}`}>{tier.line}</div>}
+            <div className="ov-title">{score === null ? 'Unable to rate' : `Usability score: ${score} out of 10`}{tier && <span className={`bdg ${tier.cls}`} style={{ marginLeft: 10, verticalAlign: 'middle' }}>{tier.label}</span>}</div>
             <div className="ov-sub">{score === null ? report.unableToRateReason : report.assessment}</div>
           </div>
         </div>
@@ -235,7 +255,7 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
             })}
           </>
         )}
-        {report.issues.length === 0 && <div className="empty" style={{ marginTop: 20 }}>No friction recorded for these visitors. Try adding Lola, Ava or Grace.</div>}
+        {report.issues.length === 0 && <div className="empty" style={{ marginTop: 20 }}>No friction recorded for these visitors.{untried.length > 0 && ` Try adding ${join(untried).replace(' and ', ' or ')}.`}</div>}
       </motion.section>
 
       <motion.h2 className="h2" {...enter(2)}>Visitor results</motion.h2>
@@ -272,11 +292,21 @@ export function Report({ req, runs, report, onRunAgain, onHome }: { req: RunRequ
             {note && <p className="ov-sub" style={{ marginTop: 6 }}>{note}</p>}
             <span className="ag-chg" style={{ background: a.soft, color: a.ink }}>{a.changes}</span>
 
-            <div className="sub-h">Their journey <span className="count">{r.steps.length}</span></div>
-            <div className="tl"><StepLog steps={r.steps} /></div>
+            {/* A run that never took a step recorded nothing worth watching. */}
+            {stat?.video && r.steps.length > 0 && (
+              <details className="fold">
+                <summary className="sub-h"><Ico d="M9 6l6 6-6 6" size={14} sw={2.2} />Session replay</summary>
+                <video key={stat.video} className="replay" src={stat.video} controls playsInline preload="metadata" aria-label={`Recording of ${a.name}’s session`} />
+              </details>
+            )}
+
+            {r.steps.length > 0 && <>
+              <div className="sub-h">Their journey <span className="count">{r.steps.length}</span></div>
+              <div className="tl"><StepLog steps={r.steps} shots /></div>
+            </>}
 
             <div className="sub-h">What got in the way <span className="count">{mine.length}</span></div>
-            {mine.length === 0 && <div className="empty">{a.name} didn’t hit anything worth fixing.</div>}
+            {mine.length === 0 && <div className="empty">{r.steps.length ? `${a.name} didn’t hit anything worth fixing.` : `${a.name} never got far enough to test anything.`}</div>}
             {mine.map((it, i) => {
               const k = `${r.id}:${it.id}`
               const open = expanded[k] ?? i === 0

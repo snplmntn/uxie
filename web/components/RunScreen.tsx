@@ -2,30 +2,31 @@
 
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react'
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { AV } from '@/lib/avatars'
 import type { AvatarId, AvatarStatus, Step } from '@/lib/types'
 import { Avatar } from './Avatar'
 import { Site } from './Site'
-import { EASE, ICON, Ico, LAND, SEV, isLive, statusOf } from './ui'
+import { EASE, ICON, Ico, LAND, SEV, Shot, isLive, statusOf } from './ui'
 
-export type AvatarRun = { id: AvatarId; status: AvatarStatus; steps: Step[]; startedAt: number; endedAt?: number }
+export type AvatarRun = { id: AvatarId; status: AvatarStatus; steps: Step[]; startedAt: number; endedAt?: number; frame?: { n: number; url: string; screenshot: string } }
 
 const MAX_STEPS = 25
 
 // Types the current thought out a few characters at a time, like someone thinking aloud.
-function useTyped(text: string, on: boolean, speed: number) {
+function useTyped(text: string, on: boolean) {
   const [n, setN] = useState(on ? 0 : text.length)
   const [prev, setPrev] = useState(text)
   if (prev !== text) { setPrev(text); setN(on ? 0 : text.length) }
   useEffect(() => {
     if (!on || n >= text.length) return
-    const t = setTimeout(() => setN((x) => Math.min(text.length, x + 3 * speed)), 70)
+    const t = setTimeout(() => setN((x) => Math.min(text.length, x + 3)), 70)
     return () => clearTimeout(t)
-  }, [on, n, text, speed])
+  }, [on, n, text])
   return on ? text.slice(0, n) : text
 }
 
-export function StepLog({ steps, current }: { steps: Step[]; current?: boolean }) {
+export function StepLog({ steps, current, shots }: { steps: Step[]; current?: boolean; shots?: boolean }) {
   return (
     <>
       {steps.map((s, i) => {
@@ -37,6 +38,7 @@ export function StepLog({ steps, current }: { steps: Step[]; current?: boolean }
               <div className="log-a">{s.label}</div>
               {s.narration && <div className="log-t">{s.narration}</div>}
               {f && <div className={`fr ${f.severity}`}><Ico d={ICON[f.severity]} size={14} sw={2} /><span><b>{SEV[f.severity].label}:</b> {f.description}</span></div>}
+              {shots && s.screenshot && <div className="log-shot"><Shot src={s.screenshot} alt={`Screen at step ${s.n}`} zoom /></div>}
             </div>
           </div>
         )
@@ -45,21 +47,21 @@ export function StepLog({ steps, current }: { steps: Step[]; current?: boolean }
   )
 }
 
-function useView(r: AvatarRun, speed: number) {
+function useView(r: AvatarRun) {
   const a = AV[r.id], st = r.steps[r.steps.length - 1]
   const running = isLive(r.status)
-  const typed = useTyped(st?.narration ?? st?.label ?? '', running, speed)
+  const typed = useTyped(st?.narration ?? st?.label ?? '', running)
   const s = statusOf(r.status)
   const total = Math.max(r.steps.length, 6)
   return {
     a, st, running, s,
     mood: running ? (st?.friction.length ? 'sad' : 'think') : s.mood,
     anim: running ? 'bob' : r.status === 'done' ? 'cheer' : r.status === 'gave_up' ? 'droop' : '',
-    narr: st ? typed : r.status === 'stopped' ? 'Stopped before the first step.' : 'Opening a fresh browser…',
+    narr: st ? typed : r.status === 'stopped' ? 'Stopped before the first step.' : r.frame ? 'Looking at the page…' : 'Opening a fresh browser…',
     shimmer: !st && running,
     caret: running && !!st && typed.length < (st.narration ?? st.label).length,
     stepLabel: st ? `Step ${st.n} · ${MAX_STEPS} max` : 'Starting',
-    action: st ? st.label : 'Launching',
+    action: st ? st.label : r.frame ? 'Reading the page' : 'Launching',
     pct: running ? (r.steps.length / total) * 100 : 100,
   } as const
 }
@@ -71,21 +73,27 @@ function Badge({ r }: { r: AvatarRun }) {
   return <span className={`bdg ${s.cls}`}><Ico d={s.icon} sw={2.4} />{s.label}</span>
 }
 
-function Preview({ r }: { r: AvatarRun }) {
-  const a = AV[r.id], st = r.steps[r.steps.length - 1]
+function Preview({ r, full }: { r: AvatarRun; full?: boolean }) {
+  const a = AV[r.id], last = r.steps[r.steps.length - 1]
+  // The live frame is what they are looking at now, a step ahead of the last decided step.
+  const st = r.frame && isLive(r.status) && r.frame.n > (last?.n ?? 0) ? { ...last, ...r.frame } : last
   return (
     <div className="frame">
       <div className="chrome"><i /><i /><i /><span className="url">{st?.url.replace(/^https?:\/\//, '') ?? 'about:blank'}</span><span className="cfg">{a.cfg}</span></div>
-      {st?.screenshot
-        ? <img src={st.screenshot} alt={`${a.name}’s screen at step ${st.n}`} style={{ display: 'block', width: '100%', aspectRatio: '16/10', objectFit: 'cover', objectPosition: 'top' }} />
-        : <Site variant={a.variant} accent={a.ink} {...st?.preview} flag={!!st?.friction.length} />}
+      {st?.screenshot && a.variant === 'mobile'
+        ? <div className={`phone-stage ${full ? 'full' : ''}`}><div className="phone"><Shot src={st.screenshot} alt={`${a.name}’s screen at step ${st.n}`} zoom={full} /></div></div>
+        : st?.screenshot
+        ? <Shot src={st.screenshot} alt={`${a.name}’s screen at step ${st.n}`} style={full ? { display: 'block', width: '100%', maxHeight: '62vh', objectFit: 'contain', background: '#F5F5F7' } : { display: 'block', width: '100%', aspectRatio: '16/10', objectFit: 'cover', objectPosition: 'top' }} zoom={full} />
+        : st?.preview
+          ? <Site variant={a.variant} accent={a.ink} {...st.preview} flag={!!st.friction.length} />
+          : <div className="boot" style={full ? { maxHeight: '62vh' } : undefined} role="status" aria-label={`Opening ${a.name}’s browser`}><i style={{ borderTopColor: a.ink }} /></div>}
     </div>
   )
 }
 
-function Card({ r, i, speed, onOpen }: { r: AvatarRun; i: number; speed: number; onOpen: () => void }) {
+function Card({ r, i, onOpen }: { r: AvatarRun; i: number; onOpen: () => void }) {
   const reduce = useReducedMotion()
-  const v = useView(r, speed)
+  const v = useView(r)
   const fin = !v.running && r.status !== 'stopped' ? `fin-${v.s.cls}` : ''
   return (
     <motion.button
@@ -107,9 +115,9 @@ function Card({ r, i, speed, onOpen }: { r: AvatarRun; i: number; speed: number;
   )
 }
 
-function Panel({ r, speed, onClose }: { r: AvatarRun; speed: number; onClose: () => void }) {
+function Panel({ r, onClose }: { r: AvatarRun; onClose: () => void }) {
   const reduce = useReducedMotion()
-  const v = useView(r, speed)
+  const v = useView(r)
   const close = useRef<HTMLButtonElement>(null)
   useEffect(() => {
     close.current?.focus()
@@ -117,7 +125,8 @@ function Panel({ r, speed, onClose }: { r: AvatarRun; speed: number; onClose: ()
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
-  return (
+  // Portal: the screen transition leaves a CSS filter on an ancestor, which would trap position:fixed inside it.
+  return createPortal(
     <>
       <motion.button className="scrim" type="button" aria-label="Close" onClick={onClose} initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.3 }} />
       <motion.div
@@ -137,7 +146,7 @@ function Panel({ r, speed, onClose }: { r: AvatarRun; speed: number; onClose: ()
         </div>
         <div className="p-body">
           <div className="p-left">
-            <Preview r={r} />
+            <Preview r={r} full />
             <div className="now">
               <div className="now-l">{v.running ? 'Thinking' : 'Final thought'} · {v.stepLabel}</div>
               <p className={`narr big ${v.shimmer ? 'shimmer' : ''}`}>{v.narr}{v.caret && <span className="caret" />}</p>
@@ -149,11 +158,12 @@ function Panel({ r, speed, onClose }: { r: AvatarRun; speed: number; onClose: ()
           </div>
         </div>
       </motion.div>
-    </>
+    </>,
+    document.body,
   )
 }
 
-export function RunScreen({ runs, goal, speed, onSpeed, onStop, demo }: { runs: AvatarRun[]; goal: string; speed: number; onSpeed?: () => void; onStop: () => void; demo: boolean }) {
+export function RunScreen({ runs, goal, onStop }: { runs: AvatarRun[]; goal: string; onStop: () => void }) {
   const [focus, setFocus] = useState<AvatarId | null>(null)
   const done = runs.every((r) => !isLive(r.status))
   const focusRun = runs.find((r) => r.id === focus)
@@ -166,14 +176,13 @@ export function RunScreen({ runs, goal, speed, onSpeed, onStop, demo }: { runs: 
           <p className="sub-run">Goal: <b>{goal}</b> · each visitor gets their own browser</p>
         </div>
         <div className="actions">
-          {demo && onSpeed && <button className="btn" type="button" onClick={onSpeed} aria-label={`Playback speed, ${speed}×`}><Ico d="M13 6l6 6-6 6M5 6l6 6-6 6" size={16} sw={2} />{speed}× speed</button>}
           <button className="btn" type="button" onClick={onStop} disabled={done}><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor" /></svg>Stop all</button>
         </div>
       </div>
       <div className="grid">
-        {runs.map((r, i) => <Card key={r.id} r={r} i={i} speed={speed} onOpen={() => setFocus(r.id)} />)}
+        {runs.map((r, i) => <Card key={r.id} r={r} i={i} onOpen={() => setFocus(r.id)} />)}
       </div>
-      <AnimatePresence>{focusRun && <Panel key="panel" r={focusRun} speed={speed} onClose={closePanel} />}</AnimatePresence>
+      <AnimatePresence>{focusRun && <Panel key="panel" r={focusRun} onClose={closePanel} />}</AnimatePresence>
     </div>
   )
 }
