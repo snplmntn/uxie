@@ -19,17 +19,16 @@ export async function openAvatarPage(avatar:Avatar, url:string): Promise<{ conte
   const b = avatar.browser
   const browser = await getBrowser()
   // Device preset first so the avatar's own viewport wins (iPhone 15 preset is 393x659).
+  // Enlargement is emulated the way browser zoom works: a narrower CSS viewport at a higher pixel ratio,
+  // so content reflows and screenshots stay correct (CSS zoom on <html> produced blank captures after scrolling).
+  const zoom = b.zoom ?? 1
   const context = await browser.newContext({
     ...(b.device ? devices[b.device] : {}),
-    viewport: b.viewport,
+    viewport: { width: Math.round(b.viewport.width / zoom), height: Math.round(b.viewport.height / zoom) },
+    ...(b.zoom ? { deviceScaleFactor: zoom } : {}),
     hasTouch: !!b.touch,
     ...(b.reducedMotion ? { reducedMotion: 'reduce' as const } : {}),
   })
-  if (b.zoom) {
-    await context.addInitScript(zoom => {
-      document.addEventListener('DOMContentLoaded', () => { document.documentElement.style.zoom = String(zoom) })
-    }, b.zoom)
-  }
   const interruptions: string[] = []
   const wire = (p:Page) => {
     p.on('dialog', d => { interruptions.push('dialog: ' + d.message()); d.dismiss().catch(() => {}) })
